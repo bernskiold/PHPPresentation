@@ -71,6 +71,7 @@ Below are the supported features for each file formats.
 |                           | Pie3D                |       | :material-check: |       | :material-check: |
 |                           | Radar                |       | :material-check: |       | :material-check: |
 |                           | Scatter              |       | :material-check: |       | :material-check: |
+|                           | AdvancedScatter      |       |       |       | :material-check: |
 
 
 ### Readers
@@ -97,6 +98,7 @@ Below are the supported features for each file formats.
 |                           | Pie3D                |       |       |       |
 |                           | Radar                |       |       |       |
 |                           | Scatter              |       |       |       |
+|                           | AdvancedScatter      |       |       | :material-check: |
 
 
 ## Contributing

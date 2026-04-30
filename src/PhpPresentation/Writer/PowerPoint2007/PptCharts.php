@@ -31,6 +31,8 @@ use PhpOffice\PhpPresentation\Shape\Chart\Gridlines;
 use PhpOffice\PhpPresentation\Shape\Chart\Legend;
 use PhpOffice\PhpPresentation\Shape\Chart\PlotArea;
 use PhpOffice\PhpPresentation\Shape\Chart\Title;
+use PhpOffice\PhpPresentation\Shape\Chart\Series\AdvancedScatterSeries;
+use PhpOffice\PhpPresentation\Shape\Chart\Type\AdvancedScatter;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Area;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Bar;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Bar3D;
@@ -253,8 +255,31 @@ class PptCharts extends AbstractDecoratorWriter
         $sheet->setTitle('Sheet1');
 
         // Write series
+        $chartType = $chart->getPlotArea()->getType();
+        $isAdvancedScatter = $chartType instanceof AdvancedScatter;
         $seriesIndex = 0;
-        foreach ($chart->getPlotArea()->getType()->getSeries() as $series) {
+        foreach ($chartType->getSeries() as $series) {
+            if ($isAdvancedScatter && $series instanceof AdvancedScatterSeries) {
+                // Each AdvancedScatter series gets its own X/Y column pair, since
+                // X values are numeric coordinates and may differ between series.
+                $xColumn = Coordinate::stringFromColumnIndex(2 + $seriesIndex * 2);
+                $yColumn = Coordinate::stringFromColumnIndex(3 + $seriesIndex * 2);
+
+                // Series title sits above the Y column.
+                $sheet->setCellValue($yColumn . '1', $series->getTitle());
+
+                $xValues = $series->getXValues();
+                $yValues = $series->getYValues();
+                $pointCount = min(count($xValues), count($yValues));
+                for ($i = 0; $i < $pointCount; ++$i) {
+                    $sheet->setCellValue($xColumn . ($i + 2), $xValues[$i]);
+                    $sheet->setCellValue($yColumn . ($i + 2), $yValues[$i]);
+                }
+
+                ++$seriesIndex;
+                continue;
+            }
+
             // Title
             $sheet->setCellValue(Coordinate::stringFromColumnIndex(2 + $seriesIndex) . 1, $series->getTitle());
 
@@ -529,6 +554,8 @@ class PptCharts extends AbstractDecoratorWriter
             $this->writeTypeLine($objWriter, $chartType, $chart->hasIncludedSpreadsheet());
         } elseif ($chartType instanceof Radar) {
             $this->writeTypeRadar($objWriter, $chartType, $chart->hasIncludedSpreadsheet());
+        } elseif ($chartType instanceof AdvancedScatter) {
+            $this->writeTypeAdvancedScatter($objWriter, $chartType, $chart->hasIncludedSpreadsheet());
         } elseif ($chartType instanceof Scatter) {
             $this->writeTypeScatter($objWriter, $chartType, $chart->hasIncludedSpreadsheet());
         } else {
@@ -2207,6 +2234,250 @@ class PptCharts extends AbstractDecoratorWriter
     }
 
     /**
+     * Write Type AdvancedScatter.
+     *
+     * Emits a `c:scatterChart` with the configured scatterStyle and proper numeric
+     * X / Y value references — supporting multiple series, duplicate X values
+     * across data points and per-data-point fills.
+     */
+    protected function writeTypeAdvancedScatter(XMLWriter $objWriter, AdvancedScatter $subject, bool $includeSheet = false): void
+    {
+        // c:scatterChart
+        $objWriter->startElement('c:scatterChart');
+
+        // c:scatterStyle
+        $objWriter->startElement('c:scatterStyle');
+        $objWriter->writeAttribute('val', $subject->getScatterStyle());
+        $objWriter->endElement();
+
+        // c:varyColors
+        $objWriter->startElement('c:varyColors');
+        $objWriter->writeAttribute('val', $subject->hasVaryColors() ? '1' : '0');
+        $objWriter->endElement();
+
+        $hasLine = in_array($subject->getScatterStyle(), [
+            AdvancedScatter::STYLE_LINE,
+            AdvancedScatter::STYLE_LINE_MARKER,
+            AdvancedScatter::STYLE_SMOOTH,
+            AdvancedScatter::STYLE_SMOOTH_MARKER,
+        ], true);
+
+        $isSmooth = $subject->isSmooth() || in_array($subject->getScatterStyle(), [
+            AdvancedScatter::STYLE_SMOOTH,
+            AdvancedScatter::STYLE_SMOOTH_MARKER,
+        ], true);
+
+        // Write series
+        $seriesIndex = 0;
+        foreach ($subject->getSeries() as $series) {
+            $xValues = $series instanceof AdvancedScatterSeries
+                ? $series->getXValues()
+                : array_keys($series->getValues());
+            $yValues = $series instanceof AdvancedScatterSeries
+                ? $series->getYValues()
+                : array_values($series->getValues());
+            $pointCount = min(count($xValues), count($yValues));
+
+            // c:ser
+            $objWriter->startElement('c:ser');
+
+            // c:idx
+            $objWriter->startElement('c:idx');
+            $objWriter->writeAttribute('val', $seriesIndex);
+            $objWriter->endElement();
+
+            // c:order
+            $objWriter->startElement('c:order');
+            $objWriter->writeAttribute('val', $seriesIndex);
+            $objWriter->endElement();
+
+            // c:tx (series title)
+            $objWriter->startElement('c:tx');
+            $coords = ($includeSheet ? 'Sheet1!$' . Coordinate::stringFromColumnIndex(2 + $seriesIndex * 2) . '$1' : '');
+            $this->writeSingleValueOrReference($objWriter, $includeSheet, $series->getTitle(), $coords);
+            $objWriter->endElement();
+
+            // c:spPr (series fill / outline)
+            $objWriter->startElement('c:spPr');
+            if (!$hasLine) {
+                // Force no line on series shape if scatterStyle is marker-only / none.
+                $objWriter->writeElement('a:noFill', null);
+                $objWriter->startElement('a:ln');
+                $objWriter->writeElement('a:noFill', null);
+                $objWriter->endElement();
+            } else {
+                $this->writeFill($objWriter, $series->getFill());
+                $this->writeOutline($objWriter, $series->getOutline());
+            }
+            $objWriter->endElement();
+
+            // c:marker
+            $this->writeSeriesMarker($objWriter, $series->getMarker());
+
+            // c:dPt — per-data-point fills (color individual points)
+            foreach ($series->getDataPointFills() as $dataPointIndex => $dataPointFill) {
+                $objWriter->startElement('c:dPt');
+
+                // c:dPt > c:idx
+                $objWriter->startElement('c:idx');
+                $objWriter->writeAttribute('val', $dataPointIndex);
+                $objWriter->endElement();
+
+                // c:dPt > c:invertIfNegative
+                $objWriter->startElement('c:invertIfNegative');
+                $objWriter->writeAttribute('val', '0');
+                $objWriter->endElement();
+
+                // c:dPt > c:bubble3D
+                $objWriter->startElement('c:bubble3D');
+                $objWriter->writeAttribute('val', '0');
+                $objWriter->endElement();
+
+                // c:dPt > c:spPr
+                $objWriter->startElement('c:spPr');
+                $this->writeFill($objWriter, $dataPointFill);
+                $objWriter->endElement();
+
+                // c:dPt
+                $objWriter->endElement();
+            }
+
+            // c:dLbls
+            $objWriter->startElement('c:dLbls');
+
+            // c:txPr
+            $objWriter->startElement('c:txPr');
+            $objWriter->writeElement('a:bodyPr', null);
+            $objWriter->writeElement('a:lstStyle', null);
+
+            $objWriter->startElement('a:p');
+            $objWriter->startElement('a:pPr');
+            $objWriter->startElement('a:defRPr');
+            $objWriter->writeAttribute('b', ($series->getFont()->isBold() ? 'true' : 'false'));
+            $objWriter->writeAttribute('i', ($series->getFont()->isItalic() ? 'true' : 'false'));
+            $objWriter->writeAttribute('strike', $series->getFont()->getStrikethrough());
+            $objWriter->writeAttribute('sz', ($series->getFont()->getSize() * 100));
+            $objWriter->writeAttribute('u', $series->getFont()->getUnderline());
+            $objWriter->writeAttributeIf($series->getFont()->getBaseline() !== 0, 'baseline', $series->getFont()->getBaseline());
+
+            $objWriter->startElement('a:solidFill');
+            $this->writeColor($objWriter, $series->getFont()->getColor());
+            $objWriter->endElement();
+
+            $objWriter->startElement('a:latin');
+            $objWriter->writeAttribute('typeface', $series->getFont()->getName());
+            $objWriter->endElement();
+            $objWriter->startElement('a:ea');
+            $objWriter->writeAttribute('typeface', $series->getFont()->getName());
+            $objWriter->endElement();
+
+            $objWriter->endElement(); // a:defRPr
+            $objWriter->endElement(); // a:pPr
+
+            $objWriter->startElement('a:endParaRPr');
+            $objWriter->writeAttribute('lang', 'en-US');
+            $objWriter->writeAttribute('dirty', '0');
+            $objWriter->endElement();
+
+            $objWriter->endElement(); // a:p
+            $objWriter->endElement(); // c:txPr
+
+            $this->writeElementWithValAttribute($objWriter, 'c:showLegendKey', $series->hasShowLegendKey() ? '1' : '0');
+            $this->writeElementWithValAttribute($objWriter, 'c:showVal', $series->hasShowValue() ? '1' : '0');
+            $this->writeElementWithValAttribute($objWriter, 'c:showCatName', $series->hasShowCategoryName() ? '1' : '0');
+            $this->writeElementWithValAttribute($objWriter, 'c:showSerName', $series->hasShowSeriesName() ? '1' : '0');
+            $this->writeElementWithValAttribute($objWriter, 'c:showPercent', $series->hasShowPercentage() ? '1' : '0');
+
+            $separator = $series->getSeparator();
+            if (!empty($separator) && PHP_EOL != $separator) {
+                $objWriter->writeElement('c:separator', $separator);
+            }
+
+            $this->writeElementWithValAttribute($objWriter, 'c:showLeaderLines', $series->hasShowLeaderLines() ? '1' : '0');
+
+            $objWriter->endElement(); // c:dLbls
+
+            // c:xVal — numeric X values
+            $objWriter->startElement('c:xVal');
+            $xCoords = ($includeSheet ? 'Sheet1!$' . Coordinate::stringFromColumnIndex(2 + $seriesIndex * 2) . '$2:$' . Coordinate::stringFromColumnIndex(2 + $seriesIndex * 2) . '$' . (1 + $pointCount) : '');
+            $this->writeNumericValuesOrReference($objWriter, $includeSheet, array_slice($xValues, 0, $pointCount), $xCoords);
+            $objWriter->endElement();
+
+            // c:yVal — numeric Y values
+            $objWriter->startElement('c:yVal');
+            $yCoords = ($includeSheet ? 'Sheet1!$' . Coordinate::stringFromColumnIndex(3 + $seriesIndex * 2) . '$2:$' . Coordinate::stringFromColumnIndex(3 + $seriesIndex * 2) . '$' . (1 + $pointCount) : '');
+            $this->writeNumericValuesOrReference($objWriter, $includeSheet, array_slice($yValues, 0, $pointCount), $yCoords);
+            $objWriter->endElement();
+
+            // c:smooth
+            $objWriter->startElement('c:smooth');
+            $objWriter->writeAttribute('val', $isSmooth ? '1' : '0');
+            $objWriter->endElement();
+
+            $objWriter->endElement(); // c:ser
+
+            ++$seriesIndex;
+        }
+
+        // c:axId
+        $objWriter->startElement('c:axId');
+        $objWriter->writeAttribute('val', '52743552');
+        $objWriter->endElement();
+
+        $objWriter->startElement('c:axId');
+        $objWriter->writeAttribute('val', '52749440');
+        $objWriter->endElement();
+
+        $objWriter->endElement(); // c:scatterChart
+    }
+
+    /**
+     * Write a list of numeric values as either inline `c:numLit` data or a
+     * `c:numRef` reference cache. Used by AdvancedScatter for X / Y value writes
+     * where the data type is always numeric (never string).
+     *
+     * @param array<int, mixed> $values
+     */
+    protected function writeNumericValuesOrReference(XMLWriter $objWriter, bool $isReference, array $values, string $reference): void
+    {
+        $referenceType = $isReference ? 'Ref' : 'Lit';
+
+        $objWriter->startElement('c:num' . $referenceType);
+
+        $numValues = count($values);
+        if (!$isReference) {
+            $objWriter->startElement('c:ptCount');
+            $objWriter->writeAttribute('val', $numValues);
+            $objWriter->endElement();
+
+            for ($i = 0; $i < $numValues; ++$i) {
+                $objWriter->startElement('c:pt');
+                $objWriter->writeAttribute('idx', $i);
+                $objWriter->writeElement('c:v', (string) ($values[$i]));
+                $objWriter->endElement();
+            }
+        } else {
+            $objWriter->writeElement('c:f', $reference);
+            $objWriter->startElement('c:numCache');
+
+            $objWriter->startElement('c:ptCount');
+            $objWriter->writeAttribute('val', $numValues);
+            $objWriter->endElement();
+
+            for ($i = 0; $i < $numValues; ++$i) {
+                $objWriter->startElement('c:pt');
+                $objWriter->writeAttribute('idx', $i);
+                $objWriter->writeElement('c:v', (string) ($values[$i]));
+                $objWriter->endElement();
+            }
+
+            $objWriter->endElement();
+        }
+
+        $objWriter->endElement();
+    }
+
+    /**
      * Write chart relationships to XML format.
      *
      * @return string XML Output
@@ -2282,8 +2553,9 @@ class PptCharts extends AbstractDecoratorWriter
         $crossesAt = $oAxis->getCrossesAt();
         $orientation = $oAxis->isReversedOrder() ? 'maxMin' : 'minMax';
 
+        $xIsValueAxis = Chart\Axis::AXIS_X == $typeAxis && $typeChart->isXAxisValueAxis();
         if (Chart\Axis::AXIS_X == $typeAxis) {
-            $mainElement = 'c:catAx';
+            $mainElement = $xIsValueAxis ? 'c:valAx' : 'c:catAx';
             $axIdVal = '52743552';
             $axPosVal = $crossesAt === 'max' ? 't' : 'b';
             $crossAxVal = '52749440';
@@ -2539,7 +2811,7 @@ class PptCharts extends AbstractDecoratorWriter
             $objWriter->endElement();
         }
 
-        if (Chart\Axis::AXIS_X == $typeAxis) {
+        if (Chart\Axis::AXIS_X == $typeAxis && !$xIsValueAxis) {
             // c:lblAlgn
             $objWriter->startElement('c:lblAlgn');
             $objWriter->writeAttribute('val', 'ctr');
@@ -2558,7 +2830,7 @@ class PptCharts extends AbstractDecoratorWriter
             }
         }
 
-        if (Chart\Axis::AXIS_Y == $typeAxis) {
+        if (Chart\Axis::AXIS_Y == $typeAxis || $xIsValueAxis) {
             // c:crossBetween
             $objWriter->startElement('c:crossBetween');
             // midCat : Position Axis On Tick Marks

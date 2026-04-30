@@ -71,6 +71,16 @@ abstract class AbstractType implements ComparableInterface
     }
 
     /**
+     * Is the X axis a value (numeric) axis rather than the default category axis?
+     *
+     * Override in subclasses (e.g. AdvancedScatter) where X holds numeric data.
+     */
+    public function isXAxisValueAxis(): bool
+    {
+        return false;
+    }
+
+    /**
      * Get hash index.
      *
      * Note that this index may vary during script execution! Only reliable moment is

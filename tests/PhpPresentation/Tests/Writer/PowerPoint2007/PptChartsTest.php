@@ -27,7 +27,9 @@ use PhpOffice\PhpPresentation\Shape\Chart\Axis;
 use PhpOffice\PhpPresentation\Shape\Chart\Gridlines;
 use PhpOffice\PhpPresentation\Shape\Chart\Marker;
 use PhpOffice\PhpPresentation\Shape\Chart\Series;
+use PhpOffice\PhpPresentation\Shape\Chart\Series\AdvancedScatterSeries;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\AbstractType;
+use PhpOffice\PhpPresentation\Shape\Chart\Type\AdvancedScatter;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Area;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Bar;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Bar3D;
@@ -1840,6 +1842,145 @@ class PptChartsTest extends PhpPresentationTestCase
 
         $this->assertZipXmlElementExists($path, $elt);
         $this->assertZipXmlAttributeEquals($path, $elt, 'val', '90');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatter(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+        $oShape->setResizeProportional(false)->setHeight(550)->setWidth(700)->setOffsetX(120)->setOffsetY(80);
+
+        $oAdvanced = new AdvancedScatter();
+        $oSeries = new AdvancedScatterSeries('Sales', [
+            [1.0, 10.0],
+            [2.5, 15.0],
+            [2.5, 18.0], // Same X — would be impossible with the legacy Scatter.
+            [4.0, 22.5],
+        ]);
+        $oAdvanced->addSeries($oSeries);
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart');
+        $this->assertZipXmlAttributeEquals($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:scatterStyle', 'val', AdvancedScatter::STYLE_MARKER);
+        $this->assertZipXmlAttributeEquals($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:varyColors', 'val', '0');
+
+        // X axis must be a value axis (c:valAx, NOT c:catAx) for AdvancedScatter.
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52743552"]');
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52749440"]');
+        $this->assertZipXmlElementNotExists($path, '/c:chartSpace/c:chart/c:plotArea/c:catAx');
+
+        // X / Y values are written as numeric literals (c:numLit), not strings.
+        $xValBase = '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:xVal/c:numLit';
+        $yValBase = '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:yVal/c:numLit';
+        $this->assertZipXmlElementExists($path, $xValBase);
+        $this->assertZipXmlElementExists($path, $yValBase);
+        $this->assertZipXmlAttributeEquals($path, $xValBase . '/c:ptCount', 'val', '4');
+        $this->assertZipXmlAttributeEquals($path, $yValBase . '/c:ptCount', 'val', '4');
+
+        // Duplicate X (2.5) survives intact.
+        $this->assertZipXmlElementEquals($path, $xValBase . '/c:pt[@idx="1"]/c:v', '2.5');
+        $this->assertZipXmlElementEquals($path, $xValBase . '/c:pt[@idx="2"]/c:v', '2.5');
+        $this->assertZipXmlElementEquals($path, $yValBase . '/c:pt[@idx="2"]/c:v', '18');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterMultipleSeries(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+
+        $oAdvanced = new AdvancedScatter();
+        $oAdvanced->addSeries(new AdvancedScatterSeries('Series A', [[1.0, 2.0], [2.0, 4.0]]));
+        $oAdvanced->addSeries(new AdvancedScatterSeries('Series B', [[10.0, 100.0], [20.0, 400.0]]));
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser[c:idx/@val="0"]');
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser[c:idx/@val="1"]');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterStyleAffectsScatterStyleAndSmooth(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+
+        $oAdvanced = new AdvancedScatter();
+        $oAdvanced->setScatterStyle(AdvancedScatter::STYLE_SMOOTH_MARKER);
+        $oAdvanced->addSeries(new AdvancedScatterSeries('S', [[1.0, 2.0], [3.0, 4.0]]));
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        $this->assertZipXmlAttributeEquals($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:scatterStyle', 'val', AdvancedScatter::STYLE_SMOOTH_MARKER);
+        // STYLE_SMOOTH_MARKER implies smooth=1.
+        $this->assertZipXmlAttributeEquals($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:smooth', 'val', '1');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterVaryColors(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+
+        $oAdvanced = new AdvancedScatter();
+        $oAdvanced->setVaryColors(true);
+        $oAdvanced->addSeries(new AdvancedScatterSeries('S', [[1.0, 2.0]]));
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        $this->assertZipXmlAttributeEquals($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:varyColors', 'val', '1');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterDataPointFill(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+
+        $oAdvanced = new AdvancedScatter();
+        $oSeries = new AdvancedScatterSeries('S', [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]);
+        $oSeries->getDataPointFill(0)->setFillType(Fill::FILL_SOLID)->setStartColor(new Color(Color::COLOR_RED));
+        $oSeries->getDataPointFill(2)->setFillType(Fill::FILL_SOLID)->setStartColor(new Color(Color::COLOR_BLUE));
+        $oAdvanced->addSeries($oSeries);
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="0"]');
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="2"]');
+        $this->assertZipXmlElementNotExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="1"]');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterIncludedSpreadsheet(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+        $oShape->setIncludeSpreadsheet(true);
+
+        $oAdvanced = new AdvancedScatter();
+        $oAdvanced->addSeries(new AdvancedScatterSeries('A', [[1.0, 10.0], [2.0, 20.0]]));
+        $oAdvanced->addSeries(new AdvancedScatterSeries('B', [[5.0, 50.0], [6.0, 60.0]]));
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        // With a spreadsheet attached, X/Y values should be written as references (numRef).
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:xVal/c:numRef');
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:yVal/c:numRef');
+        $this->assertZipFileExists('ppt/embeddings/' . $oShape->getIndexedFilename() . '.xlsx');
 
         $this->assertIsSchemaECMA376Valid();
     }
