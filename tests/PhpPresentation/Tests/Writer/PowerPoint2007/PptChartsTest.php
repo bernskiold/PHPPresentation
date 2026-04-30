@@ -2050,6 +2050,75 @@ class PptChartsTest extends PhpPresentationTestCase
         $this->assertIsSchemaECMA376Valid();
     }
 
+    public function testTypeAdvancedScatterAxesAreVisibleByDefault(): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oAdvanced = new AdvancedScatter();
+        $oAdvanced->addSeries(new AdvancedScatterSeries('S', [[1.0, 2.0]]));
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        // Both X (52743552) and Y (52749440) axes ship with a visible solid line by default.
+        $xLine = '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52743552"]/c:spPr/a:ln';
+        $yLine = '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52749440"]/c:spPr/a:ln';
+        $this->assertZipXmlElementExists($path, $xLine . '/a:solidFill/a:srgbClr');
+        $this->assertZipXmlElementExists($path, $yLine . '/a:solidFill/a:srgbClr');
+        $this->assertZipXmlElementNotExists($path, $xLine . '/a:noFill');
+        $this->assertZipXmlElementNotExists($path, $yLine . '/a:noFill');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterAxisLineColorAndWidthCustomization(): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oAdvanced = new AdvancedScatter();
+        $oAdvanced->addSeries(new AdvancedScatterSeries('S', [[1.0, 2.0]]));
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        // Customize X axis: red, 3px. Customize Y axis: blue, 2px.
+        $axisX = $oShape->getPlotArea()->getAxisX();
+        $axisX->getOutline()->setWidth(3);
+        $axisX->getOutline()->getFill()->getStartColor()->setRGB('FF0000');
+
+        $axisY = $oShape->getPlotArea()->getAxisY();
+        $axisY->getOutline()->setWidth(2);
+        $axisY->getOutline()->getFill()->getStartColor()->setRGB('0000FF');
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+        $xLine = '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52743552"]/c:spPr/a:ln';
+        $yLine = '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52749440"]/c:spPr/a:ln';
+
+        $this->assertZipXmlAttributeEquals($path, $xLine, 'w', Drawing::pixelsToEmu(3));
+        $this->assertZipXmlAttributeEquals($path, $xLine . '/a:solidFill/a:srgbClr', 'val', 'FF0000');
+        $this->assertZipXmlAttributeEquals($path, $yLine, 'w', Drawing::pixelsToEmu(2));
+        $this->assertZipXmlAttributeEquals($path, $yLine . '/a:solidFill/a:srgbClr', 'val', '0000FF');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterAxisLineCanBeHidden(): void
+    {
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oAdvanced = new AdvancedScatter();
+        $oAdvanced->addSeries(new AdvancedScatterSeries('S', [[1.0, 2.0]]));
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        // Explicit opt-out: set the outline fill to none.
+        $oShape->getPlotArea()->getAxisX()->getOutline()->getFill()->setFillType(Fill::FILL_NONE);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+        $xLine = '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52743552"]/c:spPr/a:ln';
+
+        $this->assertZipXmlElementExists($path, $xLine . '/a:noFill');
+        // The Y axis should still be visible.
+        $yLine = '/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52749440"]/c:spPr/a:ln';
+        $this->assertZipXmlElementExists($path, $yLine . '/a:solidFill/a:srgbClr');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
     public function testTypeAdvancedScatterIncludedSpreadsheet(): void
     {
         $oSlide = $this->oPresentation->getActiveSlide();

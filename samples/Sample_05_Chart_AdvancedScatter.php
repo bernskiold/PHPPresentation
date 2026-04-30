@@ -161,6 +161,12 @@ $shape->getPlotArea()->setType($scatter4);
 $shape->getPlotArea()->getAxisX()->setTitle('Brand Strength');
 $shape->getPlotArea()->getAxisY()->setTitle('Growth %');
 
+// Customize the axis lines: gray X axis, slightly thicker Y axis.
+$shape->getPlotArea()->getAxisX()->getOutline()->setWidth(1);
+$shape->getPlotArea()->getAxisX()->getOutline()->getFill()->getStartColor()->setRGB('888888');
+$shape->getPlotArea()->getAxisY()->getOutline()->setWidth(2);
+$shape->getPlotArea()->getAxisY()->getOutline()->getFill()->getStartColor()->setRGB('444444');
+
 // Save file
 echo EOL . write($objPHPPresentation, basename(__FILE__, '.php'));
 

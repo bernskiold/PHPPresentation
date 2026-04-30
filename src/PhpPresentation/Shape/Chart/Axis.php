@@ -21,6 +21,8 @@ declare(strict_types=1);
 namespace PhpOffice\PhpPresentation\Shape\Chart;
 
 use PhpOffice\PhpPresentation\ComparableInterface;
+use PhpOffice\PhpPresentation\Style\Color;
+use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Outline;
 
@@ -150,7 +152,15 @@ class Axis implements ComparableInterface
     public function __construct(string $title = 'Axis Title')
     {
         $this->title = $title;
+        // Default the axis line to a visible solid black 1px line. Without an
+        // explicit fill PowerPoint receives `<a:ln><a:noFill/></a:ln>` and
+        // hides the axis — invisible by default surprised callers, especially
+        // for chart types where the axis isn't drawn for free (e.g. AdvancedScatter
+        // where both X and Y are c:valAx). Customize via getOutline().
         $this->outline = new Outline();
+        $this->outline->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->setStartColor(new Color(Color::COLOR_BLACK));
         $this->font = new Font();
         $this->tickLabelFont = new Font();
     }

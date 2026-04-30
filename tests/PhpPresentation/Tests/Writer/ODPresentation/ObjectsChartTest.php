@@ -511,8 +511,9 @@ class ObjectsChartTest extends PhpPresentationTestCase
         $shape = $this->oPresentation->getActiveSlide()->createChartShape();
         $shape->getPlotArea()->setType($lineChart);
 
+        // Default axis outline is now a visible solid black 1px line.
         $this->assertZipXmlAttributeExists('Object 1/content.xml', $element, 'draw:stroke');
-        $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'draw:stroke', 'none');
+        $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'draw:stroke', 'solid');
         $this->assertZipXmlAttributeExists('Object 1/content.xml', $element, 'svg:stroke-width');
         $this->assertZipXmlAttributeEquals('Object 1/content.xml', $element, 'svg:stroke-width', '0.035cm');
         $this->assertZipXmlAttributeExists('Object 1/content.xml', $element, 'svg:stroke-color');
@@ -522,7 +523,6 @@ class ObjectsChartTest extends PhpPresentationTestCase
 
         $this->resetPresentationFile();
         $shape->getPlotArea()->getAxisX()->getOutline()->setWidth(10);
-        $shape->getPlotArea()->getAxisX()->getOutline()->getFill()->setFillType(Fill::FILL_SOLID);
         $shape->getPlotArea()->getAxisX()->getOutline()->getFill()->getStartColor()->setRGB('ABCDEF');
 
         $this->assertZipXmlAttributeExists('Object 1/content.xml', $element, 'draw:stroke');
