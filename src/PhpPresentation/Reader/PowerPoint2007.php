@@ -1385,6 +1385,87 @@ class PowerPoint2007 implements ReaderInterface
                                 );
                             }
 
+                            // Per-data-point fills (c:dPt) → DataPoint::setFill().
+                            $elementDataPoints = $xmlReader->getElements('c:dPt', $elementSerie);
+                            foreach ($elementDataPoints as $elementDataPoint) {
+                                $elementDpIdx = $xmlReader->getElement('c:idx', $elementDataPoint);
+                                if (!($elementDpIdx instanceof DOMElement)) {
+                                    continue;
+                                }
+                                $dpIndex = (int) $elementDpIdx->getAttribute('val');
+                                if ($elementDpFill = $xmlReader->getElement('c:spPr', $elementDataPoint)) {
+                                    $fill = $this->loadStyleFill($xmlReader, $elementDpFill);
+                                    if ($fill !== null) {
+                                        $series->getDataPointFill($dpIndex)
+                                            ->setFillType($fill->getFillType())
+                                            ->setStartColor($fill->getStartColor())
+                                            ->setEndColor($fill->getEndColor());
+                                    }
+                                }
+                            }
+
+                            // Per-data-point custom labels (c:dLbl).
+                            $elementDataLabels = $xmlReader->getElements('c:dLbls/c:dLbl', $elementSerie);
+                            foreach ($elementDataLabels as $elementDataLabel) {
+                                $elementDlIdx = $xmlReader->getElement('c:idx', $elementDataLabel);
+                                if (!($elementDlIdx instanceof DOMElement)) {
+                                    continue;
+                                }
+                                $dlIndex = (int) $elementDlIdx->getAttribute('val');
+
+                                // Concatenate all <a:t> runs inside <c:tx><c:rich> as the label text.
+                                $textNodes = $xmlReader->getElements('c:tx/c:rich/a:p/a:r/a:t', $elementDataLabel);
+                                $labelText = '';
+                                foreach ($textNodes as $textNode) {
+                                    $labelText .= $textNode->nodeValue;
+                                }
+                                if ($labelText !== '') {
+                                    $series->setDataPointLabel($dlIndex, $labelText);
+                                }
+
+                                $points = $series->getDataPoints();
+                                if (!isset($points[$dlIndex])) {
+                                    continue;
+                                }
+                                $dataPoint = $points[$dlIndex];
+
+                                $elementDlPos = $xmlReader->getElement('c:dLblPos', $elementDataLabel);
+                                if ($elementDlPos instanceof DOMElement && $elementDlPos->hasAttribute('val')) {
+                                    $dataPoint->setLabelPosition($elementDlPos->getAttribute('val'));
+                                }
+
+                                $elementDlRPr = $xmlReader->getElement('c:tx/c:rich/a:p/a:r/a:rPr', $elementDataLabel);
+                                if ($elementDlRPr instanceof DOMElement) {
+                                    $font = new Font();
+                                    if ($elementDlRPr->hasAttribute('b')) {
+                                        $font->setBold(in_array($elementDlRPr->getAttribute('b'), ['1', 'true'], true));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('i')) {
+                                        $font->setItalic(in_array($elementDlRPr->getAttribute('i'), ['1', 'true'], true));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('sz')) {
+                                        $font->setSize((int) ((int) $elementDlRPr->getAttribute('sz') / 100));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('u')) {
+                                        $font->setUnderline($elementDlRPr->getAttribute('u'));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('strike')) {
+                                        $font->setStrikethrough(in_array($elementDlRPr->getAttribute('strike'), ['1', 'true', 'sngStrike', 'dblStrike'], true));
+                                    }
+                                    if ($elementDlLatin = $xmlReader->getElement('a:latin', $elementDlRPr)) {
+                                        if ($elementDlLatin->hasAttribute('typeface')) {
+                                            $font->setName($elementDlLatin->getAttribute('typeface'));
+                                        }
+                                    }
+                                    if ($elementDlSrgb = $xmlReader->getElement('a:solidFill/a:srgbClr', $elementDlRPr)) {
+                                        if ($elementDlSrgb->hasAttribute('val')) {
+                                            $font->setColor(new Color('FF' . $elementDlSrgb->getAttribute('val')));
+                                        }
+                                    }
+                                    $dataPoint->setFont($font);
+                                }
+                            }
+
                             if ($elementShowLegendKey = $xmlReader->getElement('c:dLbls/c:showLegendKey', $elementSerie)) {
                                 $series->setShowLegendKey((bool) $elementShowLegendKey->getAttribute('val'));
                             }

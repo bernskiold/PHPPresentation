@@ -32,6 +32,7 @@ use PhpOffice\PhpPresentation\Shape\Chart\Legend;
 use PhpOffice\PhpPresentation\Shape\Chart\PlotArea;
 use PhpOffice\PhpPresentation\Shape\Chart\Title;
 use PhpOffice\PhpPresentation\Shape\Chart\Series\AdvancedScatterSeries;
+use PhpOffice\PhpPresentation\Shape\Chart\Series\DataPoint;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\AdvancedScatter;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Area;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Bar;
@@ -2345,7 +2346,17 @@ class PptCharts extends AbstractDecoratorWriter
             // c:dLbls
             $objWriter->startElement('c:dLbls');
 
-            // c:txPr
+            // c:dLbls > c:dLbl — per-data-point custom labels (must precede the series-level config)
+            if ($series instanceof AdvancedScatterSeries) {
+                foreach ($series->getDataPoints() as $pointIndex => $dataPoint) {
+                    if (!$dataPoint->hasTitle()) {
+                        continue;
+                    }
+                    $this->writeAdvancedScatterDataPointLabel($objWriter, $pointIndex, $dataPoint, $series);
+                }
+            }
+
+            // c:dLbls > c:txPr (series-level default text style)
             $objWriter->startElement('c:txPr');
             $objWriter->writeElement('a:bodyPr', null);
             $objWriter->writeElement('a:lstStyle', null);
@@ -2475,6 +2486,98 @@ class PptCharts extends AbstractDecoratorWriter
         }
 
         $objWriter->endElement();
+    }
+
+    /**
+     * Write a single per-data-point custom label (`c:dLbl`) for an
+     * AdvancedScatter series. The custom text replaces all auto-generated
+     * label content, so all `c:show*` flags are emitted as `0`.
+     */
+    protected function writeAdvancedScatterDataPointLabel(XMLWriter $objWriter, int $pointIndex, DataPoint $point, AdvancedScatterSeries $series): void
+    {
+        $font = $point->hasFont() ? $point->getFont() : $series->getFont();
+        $position = $point->getLabelPosition() ?? $series->getLabelPosition();
+
+        // c:dLbl
+        $objWriter->startElement('c:dLbl');
+
+        // c:dLbl > c:idx
+        $objWriter->startElement('c:idx');
+        $objWriter->writeAttribute('val', $pointIndex);
+        $objWriter->endElement();
+
+        // c:dLbl > c:tx > c:rich (custom label text + run properties)
+        $objWriter->startElement('c:tx');
+        $objWriter->startElement('c:rich');
+
+        $objWriter->startElement('a:bodyPr');
+        $objWriter->writeAttribute('wrap', 'square');
+        $objWriter->writeAttribute('rtlCol', '0');
+        $objWriter->writeAttribute('anchor', 'ctr');
+        $objWriter->endElement();
+
+        $objWriter->writeElement('a:lstStyle', null);
+
+        $objWriter->startElement('a:p');
+
+        $objWriter->startElement('a:pPr');
+        $objWriter->writeElement('a:defRPr', null);
+        $objWriter->endElement();
+
+        $objWriter->startElement('a:r');
+
+        $objWriter->startElement('a:rPr');
+        $objWriter->writeAttribute('lang', 'en-US');
+        $objWriter->writeAttribute('dirty', '0');
+        if ($font !== null) {
+            $objWriter->writeAttribute('b', $font->isBold() ? '1' : '0');
+            $objWriter->writeAttribute('i', $font->isItalic() ? '1' : '0');
+            $objWriter->writeAttribute('sz', (int) ($font->getSize() * 100));
+            $objWriter->writeAttribute('u', $font->getUnderline());
+            $objWriter->writeAttribute('strike', $font->getStrikethrough());
+            $objWriter->writeAttributeIf($font->getBaseline() !== 0, 'baseline', $font->getBaseline());
+
+            $objWriter->startElement('a:solidFill');
+            $this->writeColor($objWriter, $font->getColor());
+            $objWriter->endElement();
+
+            $objWriter->startElement('a:latin');
+            $objWriter->writeAttribute('typeface', $font->getName());
+            $objWriter->endElement();
+            $objWriter->startElement('a:ea');
+            $objWriter->writeAttribute('typeface', $font->getName());
+            $objWriter->endElement();
+        }
+        $objWriter->endElement(); // a:rPr
+
+        $objWriter->writeElement('a:t', (string) $point->getTitle());
+
+        $objWriter->endElement(); // a:r
+
+        $objWriter->startElement('a:endParaRPr');
+        $objWriter->writeAttribute('lang', 'en-US');
+        $objWriter->writeAttribute('dirty', '0');
+        $objWriter->endElement();
+
+        $objWriter->endElement(); // a:p
+        $objWriter->endElement(); // c:rich
+        $objWriter->endElement(); // c:tx
+
+        if ($position !== null && $position !== '') {
+            $objWriter->startElement('c:dLblPos');
+            $objWriter->writeAttribute('val', $position);
+            $objWriter->endElement();
+        }
+
+        // Force all auto-text show flags off — the custom c:tx is the entire label.
+        $this->writeElementWithValAttribute($objWriter, 'c:showLegendKey', '0');
+        $this->writeElementWithValAttribute($objWriter, 'c:showVal', '0');
+        $this->writeElementWithValAttribute($objWriter, 'c:showCatName', '0');
+        $this->writeElementWithValAttribute($objWriter, 'c:showSerName', '0');
+        $this->writeElementWithValAttribute($objWriter, 'c:showPercent', '0');
+        $this->writeElementWithValAttribute($objWriter, 'c:showBubbleSize', '0');
+
+        $objWriter->endElement(); // c:dLbl
     }
 
     /**

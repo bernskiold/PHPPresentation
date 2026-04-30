@@ -21,34 +21,29 @@ declare(strict_types=1);
 namespace PhpOffice\PhpPresentation\Shape\Chart\Series;
 
 use PhpOffice\PhpPresentation\Shape\Chart\Series;
+use PhpOffice\PhpPresentation\Style\Fill;
 
 /**
  * Series for AdvancedScatter charts.
  *
- * Unlike the legacy {@see Series} key/value model where the array key acts as the
- * (categorical) X value, this class stores X and Y coordinates as parallel
- * numeric arrays. This allows:
+ * Each point is a {@see DataPoint} carrying its (X, Y) coordinates plus
+ * optional per-point overrides (label text, marker fill, label font, label
+ * position). Compared to the legacy key/value {@see Series} model this allows:
  *
  *   - Numeric X values (not just string labels);
  *   - Multiple data points sharing the same X value;
+ *   - Per-data-point coloring and per-data-point labels;
  *   - True (X, Y) scatter semantics matching PowerPoint's scatterChart.
- *
- * Per-data-point fill (color) is inherited from {@see Series::getDataPointFill()}.
  */
 class AdvancedScatterSeries extends Series
 {
     /**
-     * @var array<int, float>
+     * @var array<int, DataPoint>
      */
-    private $xValues = [];
+    private $dataPoints = [];
 
     /**
-     * @var array<int, float>
-     */
-    private $yValues = [];
-
-    /**
-     * @param array<int, array{0: float|int|string, 1: float|int|string}|array{x: float|int|string, y: float|int|string}> $dataPoints
+     * @param array<int, DataPoint|array{0: float|int|string, 1: float|int|string, 2?: null|string}|array{x: float|int|string, y: float|int|string, title?: null|string}> $dataPoints
      */
     public function __construct(string $title = 'Series Title', array $dataPoints = [])
     {
@@ -60,104 +55,203 @@ class AdvancedScatterSeries extends Series
 
     /**
      * Add a single (X, Y) data point.
+     *
+     * Accepts either explicit coordinates plus an optional label, or a
+     * pre-built {@see DataPoint} instance (in which case `$y` and `$title`
+     * are ignored).
+     *
+     * @param DataPoint|float $x
      */
-    public function addDataPoint(float $x, float $y): self
+    public function addDataPoint($x, ?float $y = null, ?string $title = null): self
     {
-        $this->xValues[] = $x;
-        $this->yValues[] = $y;
+        if ($x instanceof DataPoint) {
+            $this->dataPoints[] = $x;
+
+            return $this;
+        }
+        $this->dataPoints[] = new DataPoint((float) $x, (float) ($y ?? 0.0), $title);
 
         return $this;
     }
 
     /**
-     * Replace the series data with the supplied set of (X, Y) points.
+     * Add a pre-built {@see DataPoint}.
+     */
+    public function addPoint(DataPoint $point): self
+    {
+        $this->dataPoints[] = $point;
+
+        return $this;
+    }
+
+    /**
+     * Replace the series data with the supplied set of points.
      *
-     * Accepts either positional pairs `[[1.0, 2.5], [2.0, 3.1]]` or associative
-     * pairs `[['x' => 1.0, 'y' => 2.5], ...]`.
+     * Accepts a mix of:
+     *   - {@see DataPoint} instances
+     *   - Positional pairs `[1.0, 2.5]` or triples `[1.0, 2.5, 'Apple']`
+     *   - Associative `['x' => 1.0, 'y' => 2.5, 'title' => 'Apple']`
      *
-     * @param array<int, array{0: float|int|string, 1: float|int|string}|array{x: float|int|string, y: float|int|string}> $dataPoints
+     * @param array<int, DataPoint|array{0: float|int|string, 1: float|int|string, 2?: null|string}|array{x: float|int|string, y: float|int|string, title?: null|string}> $dataPoints
      */
     public function setDataPoints(array $dataPoints): self
     {
-        $this->xValues = [];
-        $this->yValues = [];
+        $this->dataPoints = [];
         foreach ($dataPoints as $point) {
-            if (array_key_exists('x', $point) && array_key_exists('y', $point)) {
-                $this->addDataPoint((float) $point['x'], (float) $point['y']);
-            } else {
-                $this->addDataPoint((float) $point[0], (float) $point[1]);
+            if ($point instanceof DataPoint) {
+                $this->dataPoints[] = $point;
+                continue;
             }
+            if (array_key_exists('x', $point) && array_key_exists('y', $point)) {
+                $this->dataPoints[] = new DataPoint(
+                    (float) $point['x'],
+                    (float) $point['y'],
+                    array_key_exists('title', $point) && null !== $point['title']
+                        ? (string) $point['title']
+                        : null
+                );
+                continue;
+            }
+            $this->dataPoints[] = new DataPoint(
+                (float) $point[0],
+                (float) $point[1],
+                array_key_exists(2, $point) && null !== $point[2] ? (string) $point[2] : null
+            );
         }
 
         return $this;
     }
 
     /**
-     * Get the data points as positional pairs.
-     *
-     * @return array<int, array{0: float, 1: float}>
+     * @return array<int, DataPoint>
      */
     public function getDataPoints(): array
     {
-        $points = [];
-        $count = count($this->xValues);
-        for ($i = 0; $i < $count; ++$i) {
-            $points[] = [$this->xValues[$i], $this->yValues[$i]];
-        }
-
-        return $points;
+        return $this->dataPoints;
     }
 
     /**
-     * Get the raw X values as a numeric-indexed array.
+     * Get the X values as a numeric-indexed array.
      *
      * @return array<int, float>
      */
     public function getXValues(): array
     {
-        return $this->xValues;
+        return array_map(static function (DataPoint $point): float {
+            return $point->getX();
+        }, $this->dataPoints);
     }
 
     /**
-     * Replace the X values. Must match the length of the Y values.
+     * Replace the X values, padding/trimming the data point list to match.
      *
      * @param array<int, float|int|string> $values
      */
     public function setXValues(array $values): self
     {
-        $this->xValues = array_values(array_map('floatval', $values));
+        $values = array_values(array_map('floatval', $values));
+        $this->resizeTo(count($values));
+        foreach ($values as $i => $x) {
+            $this->dataPoints[$i]->setX($x);
+        }
 
         return $this;
     }
 
     /**
-     * Get the raw Y values as a numeric-indexed array.
+     * Get the Y values as a numeric-indexed array.
      *
      * @return array<int, float>
      */
     public function getYValues(): array
     {
-        return $this->yValues;
+        return array_map(static function (DataPoint $point): float {
+            return $point->getY();
+        }, $this->dataPoints);
     }
 
     /**
-     * Replace the Y values. Must match the length of the X values.
+     * Replace the Y values, padding/trimming the data point list to match.
      *
      * @param array<int, float|int|string> $values
      */
     public function setYValues(array $values): self
     {
-        $this->yValues = array_values(array_map('floatval', $values));
+        $values = array_values(array_map('floatval', $values));
+        $this->resizeTo(count($values));
+        foreach ($values as $i => $y) {
+            $this->dataPoints[$i]->setY($y);
+        }
 
         return $this;
     }
 
-    /**
-     * Number of (X, Y) points in the series.
-     */
     public function getPointCount(): int
     {
-        return min(count($this->xValues), count($this->yValues));
+        return count($this->dataPoints);
+    }
+
+    /**
+     * Set the visible label for the data point at the supplied index.
+     */
+    public function setDataPointLabel(int $index, ?string $title): self
+    {
+        $this->ensurePoint($index);
+        $this->dataPoints[$index]->setTitle($title);
+
+        return $this;
+    }
+
+    public function getDataPointLabel(int $index): ?string
+    {
+        return isset($this->dataPoints[$index]) ? $this->dataPoints[$index]->getTitle() : null;
+    }
+
+    /**
+     * @return array<int, string> Map of data point index → label text (only points that have a label).
+     */
+    public function getDataPointLabels(): array
+    {
+        $labels = [];
+        foreach ($this->dataPoints as $idx => $point) {
+            if ($point->hasTitle()) {
+                $labels[$idx] = (string) $point->getTitle();
+            }
+        }
+
+        return $labels;
+    }
+
+    /**
+     * Get (or lazily create) the marker fill for the data point at $dataPointIndex.
+     *
+     * Overridden so that fills set via the legacy `Series` API are routed
+     * through the canonical {@see DataPoint} storage.
+     */
+    public function getDataPointFill(int $dataPointIndex): Fill
+    {
+        $this->ensurePoint($dataPointIndex);
+        $point = $this->dataPoints[$dataPointIndex];
+        if (!$point->hasFill()) {
+            $point->setFill(new Fill());
+        }
+
+        return $point->getFill();
+    }
+
+    /**
+     * @return array<int, Fill> Map of data point index → fill (only points that have one set).
+     */
+    public function getDataPointFills(): array
+    {
+        $fills = [];
+        foreach ($this->dataPoints as $idx => $point) {
+            if ($point->hasFill()) {
+                $fills[$idx] = $point->getFill();
+            }
+        }
+
+        return $fills;
     }
 
     /**
@@ -167,6 +261,54 @@ class AdvancedScatterSeries extends Series
      */
     public function getHashCode(): string
     {
-        return md5(parent::getHashCode() . var_export($this->xValues, true) . var_export($this->yValues, true) . __CLASS__);
+        $hash = '';
+        foreach ($this->dataPoints as $point) {
+            $hash .= $point->getHashCode();
+        }
+
+        return md5(parent::getHashCode() . $hash . __CLASS__);
+    }
+
+    public function __clone()
+    {
+        parent::__clone();
+        $clones = [];
+        foreach ($this->dataPoints as $point) {
+            $clones[] = clone $point;
+        }
+        $this->dataPoints = $clones;
+    }
+
+    /**
+     * Grow / shrink the data point list to the requested length, creating
+     * empty (0, 0) points as needed. Used by the parallel-array setters.
+     */
+    private function resizeTo(int $length): void
+    {
+        $current = count($this->dataPoints);
+        if ($length === $current) {
+            return;
+        }
+        if ($length > $current) {
+            for ($i = $current; $i < $length; ++$i) {
+                $this->dataPoints[] = new DataPoint();
+            }
+
+            return;
+        }
+        $this->dataPoints = array_slice($this->dataPoints, 0, $length);
+    }
+
+    private function ensurePoint(int $index): void
+    {
+        if ($index < 0) {
+            return;
+        }
+        if (!isset($this->dataPoints[$index])) {
+            $needed = $index + 1 - count($this->dataPoints);
+            for ($i = 0; $i < $needed; ++$i) {
+                $this->dataPoints[] = new DataPoint();
+            }
+        }
     }
 }

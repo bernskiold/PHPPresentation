@@ -28,6 +28,7 @@ use PhpOffice\PhpPresentation\Shape\Chart\Gridlines;
 use PhpOffice\PhpPresentation\Shape\Chart\Marker;
 use PhpOffice\PhpPresentation\Shape\Chart\Series;
 use PhpOffice\PhpPresentation\Shape\Chart\Series\AdvancedScatterSeries;
+use PhpOffice\PhpPresentation\Shape\Chart\Series\DataPoint;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\AbstractType;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\AdvancedScatter;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Area;
@@ -1960,6 +1961,91 @@ class PptChartsTest extends PhpPresentationTestCase
         $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="0"]');
         $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="2"]');
         $this->assertZipXmlElementNotExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="1"]');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterDataPointLabels(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+
+        $oAdvanced = new AdvancedScatter();
+        $oSeries = new AdvancedScatterSeries('Brands', [
+            [1.0, 10.0, 'Apple'],
+            [2.0, 20.0, 'Adidas'],
+            [3.0, 30.0],            // no custom label
+            [4.0, 40.0, 'Allianz'],
+        ]);
+        $oAdvanced->addSeries($oSeries);
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+        $base = '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dLbls';
+
+        // One c:dLbl per labelled point (3 of 4 here).
+        $this->assertZipXmlElementExists($path, $base . '/c:dLbl[c:idx/@val="0"]');
+        $this->assertZipXmlElementExists($path, $base . '/c:dLbl[c:idx/@val="1"]');
+        $this->assertZipXmlElementNotExists($path, $base . '/c:dLbl[c:idx/@val="2"]');
+        $this->assertZipXmlElementExists($path, $base . '/c:dLbl[c:idx/@val="3"]');
+
+        // Custom text content lives inside c:tx/c:rich/a:p/a:r/a:t.
+        $this->assertZipXmlElementEquals($path, $base . '/c:dLbl[c:idx/@val="0"]/c:tx/c:rich/a:p/a:r/a:t', 'Apple');
+        $this->assertZipXmlElementEquals($path, $base . '/c:dLbl[c:idx/@val="1"]/c:tx/c:rich/a:p/a:r/a:t', 'Adidas');
+        $this->assertZipXmlElementEquals($path, $base . '/c:dLbl[c:idx/@val="3"]/c:tx/c:rich/a:p/a:r/a:t', 'Allianz');
+
+        // Custom text replaces auto labels — all show flags must be 0 on the dLbl.
+        $this->assertZipXmlAttributeEquals($path, $base . '/c:dLbl[c:idx/@val="0"]/c:showVal', 'val', '0');
+        $this->assertZipXmlAttributeEquals($path, $base . '/c:dLbl[c:idx/@val="0"]/c:showCatName', 'val', '0');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterDataPointLabelPositionAndFont(): void
+    {
+        $oSlide = $this->oPresentation->getActiveSlide();
+        $oShape = $oSlide->createChartShape();
+
+        $oAdvanced = new AdvancedScatter();
+        $oSeries = new AdvancedScatterSeries('S');
+
+        $point = new DataPoint(5.0, 25.0, 'Outlier');
+        $point->setLabelPosition(Series::LABEL_TOP);
+        $point->setFont((new Font())->setBold(true)->setSize(14)->setColor(new Color(Color::COLOR_RED)));
+        $oSeries->addPoint($point);
+
+        $oAdvanced->addSeries($oSeries);
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+        $dLbl = '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dLbls/c:dLbl[c:idx/@val="0"]';
+
+        $this->assertZipXmlAttributeEquals($path, $dLbl . '/c:dLblPos', 'val', Series::LABEL_TOP);
+        $this->assertZipXmlAttributeEquals($path, $dLbl . '/c:tx/c:rich/a:p/a:r/a:rPr', 'b', '1');
+        $this->assertZipXmlAttributeEquals($path, $dLbl . '/c:tx/c:rich/a:p/a:r/a:rPr', 'sz', '1400');
+        $this->assertZipXmlAttributeEquals($path, $dLbl . '/c:tx/c:rich/a:p/a:r/a:rPr/a:solidFill/a:srgbClr', 'val', 'FF0000');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
+    public function testTypeAdvancedScatterDataPointFillFromDataPointObject(): void
+    {
+        // Construct a DataPoint with its own fill (not via the legacy getDataPointFill API).
+        $point = new DataPoint(1.0, 2.0);
+        $point->setFill((new Fill())->setFillType(Fill::FILL_SOLID)->setStartColor(new Color(Color::COLOR_RED)));
+
+        $oAdvanced = new AdvancedScatter();
+        $oSeries = new AdvancedScatterSeries('S');
+        $oSeries->addPoint($point);
+        $oAdvanced->addSeries($oSeries);
+
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oShape->getPlotArea()->setType($oAdvanced);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+
+        $this->assertZipXmlElementExists($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="0"]/c:spPr/a:solidFill/a:srgbClr');
+        $this->assertZipXmlAttributeEquals($path, '/c:chartSpace/c:chart/c:plotArea/c:scatterChart/c:ser/c:dPt[c:idx/@val="0"]/c:spPr/a:solidFill/a:srgbClr', 'val', 'FF0000');
 
         $this->assertIsSchemaECMA376Valid();
     }

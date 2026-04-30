@@ -4,11 +4,14 @@ include_once 'Sample_Header.php';
 
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\Shape\Chart\Marker;
+use PhpOffice\PhpPresentation\Shape\Chart\Series;
 use PhpOffice\PhpPresentation\Shape\Chart\Series\AdvancedScatterSeries;
+use PhpOffice\PhpPresentation\Shape\Chart\Series\DataPoint;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\AdvancedScatter;
 use PhpOffice\PhpPresentation\Style\Border;
 use PhpOffice\PhpPresentation\Style\Color;
 use PhpOffice\PhpPresentation\Style\Fill;
+use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Outline;
 
 // Create new PHPPresentation object
@@ -122,6 +125,41 @@ $shape = $currentSlide->createChartShape();
 $shape->setResizeProportional(false)->setHeight(550)->setWidth(700)->setOffsetX(120)->setOffsetY(80);
 $shape->getTitle()->setText('Smooth Curve');
 $shape->getPlotArea()->setType($scatter3);
+
+// --- Slide 4: per-data-point labels (brand-style scatter) -----------------
+echo EOL . date('H:i:s') . ' Create templated slide #4' . EOL;
+$currentSlide = createTemplatedSlide($objPHPPresentation);
+
+echo date('H:i:s') . ' Per-data-point labels (positional triples + DataPoint)' . EOL;
+$scatter4 = new AdvancedScatter();
+$scatter4->setScatterStyle(AdvancedScatter::STYLE_MARKER);
+
+// Quick form: positional triples [x, y, label]. Title becomes the visible label
+// rendered next to the marker via c:dLbl.
+$brands = new AdvancedScatterSeries('Brands', [
+    [91.5, 12.0, 'Apple'],
+    [45.7, 8.5, 'Adidas'],
+    [44.0, 6.0, 'Audi'],
+    [79.6, 14.0, 'Allianz'],
+    [35.5, 4.5, 'Amazon'],
+    [94.9, 13.5, 'Airbnb'],
+]);
+
+// Or attach a DataPoint object for full styling control over a single label.
+$outlier = new DataPoint(10.1, 22.0, 'Outlier');
+$outlier->setLabelPosition(Series::LABEL_TOP);
+$outlier->setFont((new Font())->setBold(true)->setSize(12)->setColor(new Color(Color::COLOR_RED)));
+$outlier->setFill((new Fill())->setFillType(Fill::FILL_SOLID)->setStartColor(new Color(Color::COLOR_RED)));
+$brands->addPoint($outlier);
+
+$scatter4->addSeries($brands);
+
+$shape = $currentSlide->createChartShape();
+$shape->setResizeProportional(false)->setHeight(550)->setWidth(700)->setOffsetX(120)->setOffsetY(80);
+$shape->getTitle()->setText('Brand Scatter (with per-point labels)');
+$shape->getPlotArea()->setType($scatter4);
+$shape->getPlotArea()->getAxisX()->setTitle('Brand Strength');
+$shape->getPlotArea()->getAxisY()->setTitle('Growth %');
 
 // Save file
 echo EOL . write($objPHPPresentation, basename(__FILE__, '.php'));
