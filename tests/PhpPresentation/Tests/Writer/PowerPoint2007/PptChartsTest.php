@@ -379,6 +379,29 @@ class PptChartsTest extends PhpPresentationTestCase
         $this->assertIsSchemaECMA376Valid();
     }
 
+    public function testAxisBoundsAcceptsFloats(): void
+    {
+        // Regression: with int-only typing, bounds like -0.2 / +0.2 got
+        // truncated/rounded so the chart blew out to a much wider range.
+        $oSeries = new Series('Downloads', $this->seriesData);
+        $oLine = new Line();
+        $oLine->addSeries($oSeries);
+        $oShape = $this->oPresentation->getActiveSlide()->createChartShape();
+        $oShape->getPlotArea()->setType($oLine);
+
+        $oShape->getPlotArea()->getAxisX()->setMinBounds(-0.2);
+        $oShape->getPlotArea()->getAxisX()->setMaxBounds(0.15);
+
+        $path = 'ppt/charts/' . $oShape->getIndexedFilename();
+        $elementMin = '/c:chartSpace/c:chart/c:plotArea/c:catAx/c:scaling/c:min';
+        $elementMax = '/c:chartSpace/c:chart/c:plotArea/c:catAx/c:scaling/c:max';
+
+        $this->assertZipXmlAttributeEquals($path, $elementMin, 'val', '-0.2');
+        $this->assertZipXmlAttributeEquals($path, $elementMax, 'val', '0.15');
+
+        $this->assertIsSchemaECMA376Valid();
+    }
+
     public function testAxisBoundsIfZero(): void
     {
         $value = 0;

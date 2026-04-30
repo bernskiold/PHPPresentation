@@ -63,6 +63,37 @@ class AxisTest extends TestCase
         self::assertNull($object->getMaxBounds());
     }
 
+    public function testFloatBoundsArePreserved(): void
+    {
+        $object = new Axis();
+
+        $object->setMinBounds(-0.2)->setMaxBounds(0.15);
+
+        self::assertSame(-0.2, $object->getMinBounds());
+        self::assertSame(0.15, $object->getMaxBounds());
+    }
+
+    public function testIntegerBoundsAreReturnedAsIntegers(): void
+    {
+        // Backwards-compat: callers that stored an int still see an int back
+        // (no implicit widening to float).
+        $object = new Axis();
+
+        $object->setMinBounds(5)->setMaxBounds(10);
+
+        self::assertSame(5, $object->getMinBounds());
+        self::assertSame(10, $object->getMaxBounds());
+    }
+
+    public function testRejectsNonNumericBounds(): void
+    {
+        $object = new Axis();
+
+        $this->expectException(\TypeError::class);
+        // @phpstan-ignore-next-line — intentionally passing a string to verify the runtime guard
+        $object->setMinBounds('not-a-number');
+    }
+
     public function testCrossesAt(): void
     {
         $object = new Axis();

@@ -90,12 +90,12 @@ class Axis implements ComparableInterface
     protected $minorGridlines;
 
     /**
-     * @var int
+     * @var null|float|int
      */
     protected $minBounds;
 
     /**
-     * @var int
+     * @var null|float|int
      */
     protected $maxBounds;
 
@@ -237,26 +237,60 @@ class Axis implements ComparableInterface
         return $this;
     }
 
-    public function getMinBounds(): ?int
+    /**
+     * @return null|float|int
+     */
+    public function getMinBounds()
     {
         return $this->minBounds;
     }
 
-    public function setMinBounds(?int $minBounds = null): self
+    /**
+     * Set the minimum bound. Accepts int, float, or null.
+     *
+     * The value is stored as-is so callers that previously passed an integer
+     * continue to get an integer back from {@see getMinBounds()}.
+     *
+     * @param null|float|int $minBounds
+     */
+    public function setMinBounds($minBounds = null): self
     {
-        $this->minBounds = null === $minBounds ? null : $minBounds;
+        if (null !== $minBounds && !is_int($minBounds) && !is_float($minBounds)) {
+            throw new \TypeError(sprintf(
+                'Axis::setMinBounds() expects int, float, or null, %s given',
+                gettype($minBounds)
+            ));
+        }
+        $this->minBounds = $minBounds;
 
         return $this;
     }
 
-    public function getMaxBounds(): ?int
+    /**
+     * @return null|float|int
+     */
+    public function getMaxBounds()
     {
         return $this->maxBounds;
     }
 
-    public function setMaxBounds(?int $maxBounds = null): self
+    /**
+     * Set the maximum bound. Accepts int, float, or null.
+     *
+     * The value is stored as-is so callers that previously passed an integer
+     * continue to get an integer back from {@see getMaxBounds()}.
+     *
+     * @param null|float|int $maxBounds
+     */
+    public function setMaxBounds($maxBounds = null): self
     {
-        $this->maxBounds = null === $maxBounds ? null : $maxBounds;
+        if (null !== $maxBounds && !is_int($maxBounds) && !is_float($maxBounds)) {
+            throw new \TypeError(sprintf(
+                'Axis::setMaxBounds() expects int, float, or null, %s given',
+                gettype($maxBounds)
+            ));
+        }
+        $this->maxBounds = $maxBounds;
 
         return $this;
     }
