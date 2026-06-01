@@ -1330,7 +1330,177 @@ class PowerPoint2007 implements ReaderInterface
                         $oShape->getPlotArea()->setType($shapeType);
                     }
 
-                    if ($oElement = $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea/c:catAx')) {
+                    if ($oElement = $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea/c:scatterChart')) {
+                        $shapeType = new Chart\Type\AdvancedScatter();
+
+                        $elementScatterStyle = $xmlReader->getElement('c:scatterStyle', $oElement);
+                        if ($elementScatterStyle instanceof DOMElement && $elementScatterStyle->hasAttribute('val')) {
+                            $shapeType->setScatterStyle($elementScatterStyle->getAttribute('val'));
+                        }
+
+                        $elementVaryColors = $xmlReader->getElement('c:varyColors', $oElement);
+                        if ($elementVaryColors instanceof DOMElement && $elementVaryColors->hasAttribute('val')) {
+                            $shapeType->setVaryColors((bool) $elementVaryColors->getAttribute('val'));
+                        }
+
+                        $elementSeries = $xmlReader->getElements('c:ser', $oElement);
+                        foreach ($elementSeries as $elementSerie) {
+                            $series = new Chart\Series\AdvancedScatterSeries();
+                            if ($elementTitle = $xmlReader->getElement('c:tx/c:strRef/c:strCache/c:pt/c:v', $elementSerie)) {
+                                $series->setTitle($elementTitle->nodeValue);
+                            } elseif ($elementTitle = $xmlReader->getElement('c:tx/c:v', $elementSerie)) {
+                                $series->setTitle($elementTitle->nodeValue);
+                            }
+
+                            $numPoints = 0;
+                            $elementXCache = $xmlReader->getElement('c:xVal/c:numRef/c:numCache', $elementSerie)
+                                ?: $xmlReader->getElement('c:xVal/c:numLit', $elementSerie);
+                            if ($elementXCache && ($elementXCount = $xmlReader->getElement('c:ptCount', $elementXCache))) {
+                                $numPoints = (int) $elementXCount->getAttribute('val');
+                            }
+                            $elementYCache = $xmlReader->getElement('c:yVal/c:numRef/c:numCache', $elementSerie)
+                                ?: $xmlReader->getElement('c:yVal/c:numLit', $elementSerie);
+
+                            for ($inc = 0; $inc < $numPoints; ++$inc) {
+                                $xVal = '0';
+                                $yVal = '0';
+                                if ($elementXCache && ($subElementX = $xmlReader->getElement('c:pt[@idx="' . $inc . '"]/c:v', $elementXCache))) {
+                                    $xVal = $subElementX->nodeValue;
+                                }
+                                if ($elementYCache && ($subElementY = $xmlReader->getElement('c:pt[@idx="' . $inc . '"]/c:v', $elementYCache))) {
+                                    $yVal = $subElementY->nodeValue;
+                                }
+                                $series->addDataPoint((float) $xVal, (float) $yVal);
+                            }
+
+                            if ($elementFill = $xmlReader->getElement('c:spPr', $elementSerie)) {
+                                $series->setFill(
+                                    $this->loadStyleFill($xmlReader, $elementFill)
+                                );
+                            }
+
+                            if ($elementOutline = $xmlReader->getElement('c:spPr/a:ln', $elementSerie)) {
+                                $series->setOutline(
+                                    $this->loadStyleOutline($xmlReader, $elementOutline)
+                                );
+                            }
+
+                            // Per-data-point fills (c:dPt) → DataPoint::setFill().
+                            $elementDataPoints = $xmlReader->getElements('c:dPt', $elementSerie);
+                            foreach ($elementDataPoints as $elementDataPoint) {
+                                $elementDpIdx = $xmlReader->getElement('c:idx', $elementDataPoint);
+                                if (!($elementDpIdx instanceof DOMElement)) {
+                                    continue;
+                                }
+                                $dpIndex = (int) $elementDpIdx->getAttribute('val');
+                                if ($elementDpFill = $xmlReader->getElement('c:spPr', $elementDataPoint)) {
+                                    $fill = $this->loadStyleFill($xmlReader, $elementDpFill);
+                                    if ($fill !== null) {
+                                        $series->getDataPointFill($dpIndex)
+                                            ->setFillType($fill->getFillType())
+                                            ->setStartColor($fill->getStartColor())
+                                            ->setEndColor($fill->getEndColor());
+                                    }
+                                }
+                            }
+
+                            // Per-data-point custom labels (c:dLbl).
+                            $elementDataLabels = $xmlReader->getElements('c:dLbls/c:dLbl', $elementSerie);
+                            foreach ($elementDataLabels as $elementDataLabel) {
+                                $elementDlIdx = $xmlReader->getElement('c:idx', $elementDataLabel);
+                                if (!($elementDlIdx instanceof DOMElement)) {
+                                    continue;
+                                }
+                                $dlIndex = (int) $elementDlIdx->getAttribute('val');
+
+                                // Concatenate all <a:t> runs inside <c:tx><c:rich> as the label text.
+                                $textNodes = $xmlReader->getElements('c:tx/c:rich/a:p/a:r/a:t', $elementDataLabel);
+                                $labelText = '';
+                                foreach ($textNodes as $textNode) {
+                                    $labelText .= $textNode->nodeValue;
+                                }
+                                if ($labelText !== '') {
+                                    $series->setDataPointLabel($dlIndex, $labelText);
+                                }
+
+                                $points = $series->getDataPoints();
+                                if (!isset($points[$dlIndex])) {
+                                    continue;
+                                }
+                                $dataPoint = $points[$dlIndex];
+
+                                $elementDlPos = $xmlReader->getElement('c:dLblPos', $elementDataLabel);
+                                if ($elementDlPos instanceof DOMElement && $elementDlPos->hasAttribute('val')) {
+                                    $dataPoint->setLabelPosition($elementDlPos->getAttribute('val'));
+                                }
+
+                                $elementDlRPr = $xmlReader->getElement('c:tx/c:rich/a:p/a:r/a:rPr', $elementDataLabel);
+                                if ($elementDlRPr instanceof DOMElement) {
+                                    $font = new Font();
+                                    if ($elementDlRPr->hasAttribute('b')) {
+                                        $font->setBold(in_array($elementDlRPr->getAttribute('b'), ['1', 'true'], true));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('i')) {
+                                        $font->setItalic(in_array($elementDlRPr->getAttribute('i'), ['1', 'true'], true));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('sz')) {
+                                        $font->setSize((int) ((int) $elementDlRPr->getAttribute('sz') / 100));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('u')) {
+                                        $font->setUnderline($elementDlRPr->getAttribute('u'));
+                                    }
+                                    if ($elementDlRPr->hasAttribute('strike')) {
+                                        $font->setStrikethrough(in_array($elementDlRPr->getAttribute('strike'), ['1', 'true', 'sngStrike', 'dblStrike'], true));
+                                    }
+                                    if ($elementDlLatin = $xmlReader->getElement('a:latin', $elementDlRPr)) {
+                                        if ($elementDlLatin->hasAttribute('typeface')) {
+                                            $font->setName($elementDlLatin->getAttribute('typeface'));
+                                        }
+                                    }
+                                    if ($elementDlSrgb = $xmlReader->getElement('a:solidFill/a:srgbClr', $elementDlRPr)) {
+                                        if ($elementDlSrgb->hasAttribute('val')) {
+                                            $font->setColor(new Color('FF' . $elementDlSrgb->getAttribute('val')));
+                                        }
+                                    }
+                                    $dataPoint->setFont($font);
+                                }
+                            }
+
+                            if ($elementShowLegendKey = $xmlReader->getElement('c:dLbls/c:showLegendKey', $elementSerie)) {
+                                $series->setShowLegendKey((bool) $elementShowLegendKey->getAttribute('val'));
+                            }
+                            if ($elementShowVal = $xmlReader->getElement('c:dLbls/c:showVal', $elementSerie)) {
+                                $series->setShowValue((bool) $elementShowVal->getAttribute('val'));
+                            }
+                            if ($elementShowCatName = $xmlReader->getElement('c:dLbls/c:showCatName', $elementSerie)) {
+                                $series->setShowCategoryName((bool) $elementShowCatName->getAttribute('val'));
+                            }
+                            if ($elementShowSerName = $xmlReader->getElement('c:dLbls/c:showSerName', $elementSerie)) {
+                                $series->setShowSeriesName((bool) $elementShowSerName->getAttribute('val'));
+                            }
+                            if ($elementShowPercent = $xmlReader->getElement('c:dLbls/c:showPercent', $elementSerie)) {
+                                $series->setShowPercentage((bool) $elementShowPercent->getAttribute('val'));
+                            }
+                            if ($elementShowLeaderLines = $xmlReader->getElement('c:dLbls/c:showLeaderLines', $elementSerie)) {
+                                $series->setShowLeaderLines((bool) $elementShowLeaderLines->getAttribute('val'));
+                            }
+
+                            $elementSmooth = $xmlReader->getElement('c:smooth', $elementSerie);
+                            if ($elementSmooth instanceof DOMElement && $elementSmooth->hasAttribute('val')) {
+                                $shapeType->setIsSmooth((bool) $elementSmooth->getAttribute('val'));
+                            }
+
+                            $shapeType->addSeries($series);
+                        }
+
+                        $oShape->getPlotArea()->setType($shapeType);
+                    }
+
+                    // X axis: prefer c:catAx (category) — for AdvancedScatter, X is a
+                    // value axis and is identified by its axId (52743552, written by writeAxis).
+                    $xAxisElement = $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea/c:catAx')
+                        ?: $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52743552"]');
+                    if ($oElement = $xAxisElement) {
                         if ($elementOrientation = $xmlReader->getElement('c:scaling/c:orientation', $oElement)) {
                             $oShape->getPlotArea()->getAxisX()->setIsReversedOrder(
                                 (bool) ($elementOrientation->getAttribute('val') === 'maxMin')
@@ -1362,7 +1532,11 @@ class PowerPoint2007 implements ReaderInterface
                         }
                     }
 
-                    if ($oElement = $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea/c:valAx')) {
+                    // Y axis: prefer the valAx whose axId matches the Y convention (52749440);
+                    // fall back to the first valAx for legacy / non-scatter charts.
+                    $yAxisElement = $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea/c:valAx[c:axId/@val="52749440"]')
+                        ?: $xmlReader->getElement('/c:chartSpace/c:chart/c:plotArea/c:valAx');
+                    if ($oElement = $yAxisElement) {
                         if ($elementOrientation = $xmlReader->getElement('c:scaling/c:orientation', $oElement)) {
                             $oShape->getPlotArea()->getAxisY()->setIsReversedOrder(
                                 (bool) ($elementOrientation->getAttribute('val') === 'maxMin')

@@ -22,6 +22,8 @@ namespace PhpOffice\PhpPresentation\Tests\Shape\Chart;
 
 use PhpOffice\PhpPresentation\Shape\Chart\Axis;
 use PhpOffice\PhpPresentation\Shape\Chart\Gridlines;
+use PhpOffice\PhpPresentation\Style\Color;
+use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Outline;
 use PHPUnit\Framework\TestCase;
@@ -59,6 +61,37 @@ class AxisTest extends TestCase
         self::assertEquals($value, $object->getMaxBounds());
         self::assertInstanceOf(Axis::class, $object->setMaxBounds());
         self::assertNull($object->getMaxBounds());
+    }
+
+    public function testFloatBoundsArePreserved(): void
+    {
+        $object = new Axis();
+
+        $object->setMinBounds(-0.2)->setMaxBounds(0.15);
+
+        self::assertSame(-0.2, $object->getMinBounds());
+        self::assertSame(0.15, $object->getMaxBounds());
+    }
+
+    public function testIntegerBoundsAreReturnedAsIntegers(): void
+    {
+        // Backwards-compat: callers that stored an int still see an int back
+        // (no implicit widening to float).
+        $object = new Axis();
+
+        $object->setMinBounds(5)->setMaxBounds(10);
+
+        self::assertSame(5, $object->getMinBounds());
+        self::assertSame(10, $object->getMaxBounds());
+    }
+
+    public function testRejectsNonNumericBounds(): void
+    {
+        $object = new Axis();
+
+        $this->expectException(\TypeError::class);
+        // @phpstan-ignore-next-line — intentionally passing a string to verify the runtime guard
+        $object->setMinBounds('not-a-number');
     }
 
     public function testCrossesAt(): void
@@ -155,6 +188,34 @@ class AxisTest extends TestCase
         self::assertInstanceOf(Outline::class, $object->getOutline());
         self::assertInstanceOf(Axis::class, $object->setOutline($oMock));
         self::assertInstanceOf(Outline::class, $object->getOutline());
+    }
+
+    public function testDefaultOutlineIsVisibleSolidBlack(): void
+    {
+        $object = new Axis();
+        $outline = $object->getOutline();
+
+        self::assertSame(Fill::FILL_SOLID, $outline->getFill()->getFillType());
+        self::assertSame(Color::COLOR_BLACK, $outline->getFill()->getStartColor()->getARGB());
+        self::assertSame(1, $outline->getWidth());
+    }
+
+    public function testOutlineColorAndWidthAreCustomizable(): void
+    {
+        $object = new Axis();
+        $object->getOutline()->setWidth(4);
+        $object->getOutline()->getFill()->getStartColor()->setRGB('ABCDEF');
+
+        self::assertSame(4, $object->getOutline()->getWidth());
+        self::assertSame('FFABCDEF', $object->getOutline()->getFill()->getStartColor()->getARGB());
+    }
+
+    public function testOutlineCanBeHiddenByOptingOutOfFill(): void
+    {
+        $object = new Axis();
+        $object->getOutline()->getFill()->setFillType(Fill::FILL_NONE);
+
+        self::assertSame(Fill::FILL_NONE, $object->getOutline()->getFill()->getFillType());
     }
 
     public function testTickLabelFont(): void
