@@ -243,6 +243,13 @@ abstract class AbstractDecoratorWriter extends \PhpOffice\PhpPresentation\Writer
         // Fill
         $this->writeFill($objWriter, $oOutline->getFill());
 
+        // a:prstDash (must follow the line fill per CT_LineProperties)
+        if ($oOutline->hasDashStyle()) {
+            $objWriter->startElement('a:prstDash');
+            $objWriter->writeAttribute('val', $oOutline->getDashStyle());
+            $objWriter->endElement();
+        }
+
         // > a:ln
         $objWriter->endElement();
     }

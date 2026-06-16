@@ -54,6 +54,16 @@ class Axis implements ComparableInterface
     private $title = 'Axis Title';
 
     /**
+     * Optional rich, multi-line title. Each entry is a paragraph (its own line),
+     * and each paragraph is a list of runs carrying their own text and bold flag.
+     * When set, it replaces the plain {@see self::$title} string at write time and
+     * allows mixing bold and regular runs across multiple lines.
+     *
+     * @var array<int, array<int, array{text: string, bold: bool}>>
+     */
+    private $titleParagraphs = [];
+
+    /**
      * @var int
      */
     private $titleRotation = 0;
@@ -179,6 +189,33 @@ class Axis implements ComparableInterface
     public function setTitle(string $value = 'Axis Title'): self
     {
         $this->title = $value;
+
+        return $this;
+    }
+
+    /**
+     * @return array<int, array<int, array{text: string, bold: bool}>>
+     */
+    public function getTitleParagraphs(): array
+    {
+        return $this->titleParagraphs;
+    }
+
+    public function hasTitleParagraphs(): bool
+    {
+        return [] !== $this->titleParagraphs;
+    }
+
+    /**
+     * Provide a rich, multi-line title. Each paragraph (line) is a list of runs,
+     * each run an array of `['text' => string, 'bold' => bool]`. Pass an empty
+     * array to clear it and fall back to the plain {@see self::setTitle()} string.
+     *
+     * @param array<int, array<int, array{text: string, bold: bool}>> $paragraphs
+     */
+    public function setTitleParagraphs(array $paragraphs): self
+    {
+        $this->titleParagraphs = $paragraphs;
 
         return $this;
     }
@@ -431,7 +468,7 @@ class Axis implements ComparableInterface
      */
     public function getHashCode(): string
     {
-        return md5($this->title . $this->formatCode . __CLASS__);
+        return md5($this->title . serialize($this->titleParagraphs) . $this->formatCode . __CLASS__);
     }
 
     /**

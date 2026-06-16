@@ -2315,8 +2315,22 @@ class PptCharts extends AbstractDecoratorWriter
             // c:marker
             $this->writeSeriesMarker($objWriter, $series->getMarker());
 
-            // c:dPt — per-data-point fills (color individual points)
-            foreach ($series->getDataPointFills() as $dataPointIndex => $dataPointFill) {
+            // c:dPt — per-data-point fills (color individual points) and/or
+            // per-point marker visibility overrides. The OOXML CT_DPt sequence
+            // is idx, invertIfNegative, marker, bubble3D, spPr — so the marker
+            // (when overridden) is written before bubble3D and the fill spPr.
+            $dataPointFills = $series->getDataPointFills();
+            $dataPointMarkers = $series instanceof AdvancedScatterSeries
+                ? $series->getDataPointMarkerVisibilities()
+                : [];
+
+            $dataPointIndices = array_unique(array_merge(
+                array_keys($dataPointFills),
+                array_keys($dataPointMarkers)
+            ));
+            sort($dataPointIndices);
+
+            foreach ($dataPointIndices as $dataPointIndex) {
                 $objWriter->startElement('c:dPt');
 
                 // c:dPt > c:idx
@@ -2329,15 +2343,26 @@ class PptCharts extends AbstractDecoratorWriter
                 $objWriter->writeAttribute('val', '0');
                 $objWriter->endElement();
 
+                // c:dPt > c:marker (per-point visibility override)
+                if (array_key_exists($dataPointIndex, $dataPointMarkers)) {
+                    $objWriter->startElement('c:marker');
+                    $objWriter->startElement('c:symbol');
+                    $objWriter->writeAttribute('val', $dataPointMarkers[$dataPointIndex] ? 'circle' : 'none');
+                    $objWriter->endElement();
+                    $objWriter->endElement();
+                }
+
                 // c:dPt > c:bubble3D
                 $objWriter->startElement('c:bubble3D');
                 $objWriter->writeAttribute('val', '0');
                 $objWriter->endElement();
 
                 // c:dPt > c:spPr
-                $objWriter->startElement('c:spPr');
-                $this->writeFill($objWriter, $dataPointFill);
-                $objWriter->endElement();
+                if (array_key_exists($dataPointIndex, $dataPointFills)) {
+                    $objWriter->startElement('c:spPr');
+                    $this->writeFill($objWriter, $dataPointFills[$dataPointIndex]);
+                    $objWriter->endElement();
+                }
 
                 // c:dPt
                 $objWriter->endElement();
@@ -2728,7 +2753,7 @@ class PptCharts extends AbstractDecoratorWriter
             $objWriter->endElement();
         }
 
-        if ('' != $oAxis->getTitle()) {
+        if ('' != $oAxis->getTitle() || $oAxis->hasTitleParagraphs()) {
             // c:title
             $objWriter->startElement('c:title');
 
@@ -2746,64 +2771,95 @@ class PptCharts extends AbstractDecoratorWriter
             // a:lstStyle
             $objWriter->writeElement('a:lstStyle', null);
 
-            // a:p
-            $objWriter->startElement('a:p');
+            if ($oAxis->hasTitleParagraphs()) {
+                // One a:p per line, each run carrying its own bold flag, so the
+                // title can mix bold and regular text across multiple lines.
+                foreach ($oAxis->getTitleParagraphs() as $paragraph) {
+                    // a:p
+                    $objWriter->startElement('a:p');
 
-            // a:pPr
-            $objWriter->startElement('a:pPr');
+                    // a:pPr > a:defRPr (paragraph default font)
+                    $objWriter->startElement('a:pPr');
+                    $this->writeAxisTitleRunProperties($objWriter, 'a:defRPr', $oAxis->getFont(), $oAxis->getFont()->isBold(), false);
+                    $objWriter->endElement();
 
-            // a:defRPr
-            $objWriter->startElement('a:defRPr');
+                    foreach ($paragraph as $run) {
+                        // a:r
+                        $objWriter->startElement('a:r');
+                        $this->writeAxisTitleRunProperties($objWriter, 'a:rPr', $oAxis->getFont(), (bool) ($run['bold'] ?? false), true);
+                        $objWriter->writeElement('a:t', (string) ($run['text'] ?? ''));
+                        $objWriter->endElement();
+                    }
 
-            $objWriter->writeAttribute('b', ($oAxis->getFont()->isBold() ? 'true' : 'false'));
-            $objWriter->writeAttribute('i', ($oAxis->getFont()->isItalic() ? 'true' : 'false'));
-            $objWriter->writeAttribute('strike', $oAxis->getFont()->getStrikethrough());
-            $objWriter->writeAttribute('sz', ($oAxis->getFont()->getSize() * 100));
-            $objWriter->writeAttribute('u', $oAxis->getFont()->getUnderline());
-            $objWriter->writeAttributeIf($oAxis->getFont()->getBaseline() !== 0, 'baseline', $oAxis->getFont()->getBaseline());
+                    // a:endParaRPr
+                    $objWriter->startElement('a:endParaRPr');
+                    $objWriter->writeAttribute('lang', 'en-US');
+                    $objWriter->writeAttribute('dirty', '0');
+                    $objWriter->endElement();
 
-            // Font - a:solidFill
-            $objWriter->startElement('a:solidFill');
-            $this->writeColor($objWriter, $oAxis->getFont()->getColor());
-            $objWriter->endElement();
+                    // ## a:p
+                    $objWriter->endElement();
+                }
+            } else {
+                // a:p
+                $objWriter->startElement('a:p');
 
-            // Font - a:latin
-            $objWriter->startElement('a:latin');
-            $objWriter->writeAttribute('typeface', $oAxis->getFont()->getName());
-            $objWriter->endElement();
-            // a:ea
-            $objWriter->startElement('a:ea');
-            $objWriter->writeAttribute('typeface', $oAxis->getFont()->getName());
-            $objWriter->endElement();
+                // a:pPr
+                $objWriter->startElement('a:pPr');
 
-            $objWriter->endElement();
+                // a:defRPr
+                $objWriter->startElement('a:defRPr');
 
-            // ## a:pPr
-            $objWriter->endElement();
+                $objWriter->writeAttribute('b', ($oAxis->getFont()->isBold() ? 'true' : 'false'));
+                $objWriter->writeAttribute('i', ($oAxis->getFont()->isItalic() ? 'true' : 'false'));
+                $objWriter->writeAttribute('strike', $oAxis->getFont()->getStrikethrough());
+                $objWriter->writeAttribute('sz', ($oAxis->getFont()->getSize() * 100));
+                $objWriter->writeAttribute('u', $oAxis->getFont()->getUnderline());
+                $objWriter->writeAttributeIf($oAxis->getFont()->getBaseline() !== 0, 'baseline', $oAxis->getFont()->getBaseline());
 
-            // a:r
-            $objWriter->startElement('a:r');
+                // Font - a:solidFill
+                $objWriter->startElement('a:solidFill');
+                $this->writeColor($objWriter, $oAxis->getFont()->getColor());
+                $objWriter->endElement();
 
-            // a:rPr
-            $objWriter->startElement('a:rPr');
-            $objWriter->writeAttribute('lang', 'en-US');
-            $objWriter->writeAttribute('dirty', '0');
-            $objWriter->endElement();
+                // Font - a:latin
+                $objWriter->startElement('a:latin');
+                $objWriter->writeAttribute('typeface', $oAxis->getFont()->getName());
+                $objWriter->endElement();
+                // a:ea
+                $objWriter->startElement('a:ea');
+                $objWriter->writeAttribute('typeface', $oAxis->getFont()->getName());
+                $objWriter->endElement();
 
-            // a:t
-            $objWriter->writeElement('a:t', $oAxis->getTitle());
+                $objWriter->endElement();
 
-            // ## a:r
-            $objWriter->endElement();
+                // ## a:pPr
+                $objWriter->endElement();
 
-            // a:endParaRPr
-            $objWriter->startElement('a:endParaRPr');
-            $objWriter->writeAttribute('lang', 'en-US');
-            $objWriter->writeAttribute('dirty', '0');
-            $objWriter->endElement();
+                // a:r
+                $objWriter->startElement('a:r');
 
-            // ## a:p
-            $objWriter->endElement();
+                // a:rPr
+                $objWriter->startElement('a:rPr');
+                $objWriter->writeAttribute('lang', 'en-US');
+                $objWriter->writeAttribute('dirty', '0');
+                $objWriter->endElement();
+
+                // a:t
+                $objWriter->writeElement('a:t', $oAxis->getTitle());
+
+                // ## a:r
+                $objWriter->endElement();
+
+                // a:endParaRPr
+                $objWriter->startElement('a:endParaRPr');
+                $objWriter->writeAttribute('lang', 'en-US');
+                $objWriter->writeAttribute('dirty', '0');
+                $objWriter->endElement();
+
+                // ## a:p
+                $objWriter->endElement();
+            }
 
             // ## c:rich
             $objWriter->endElement();
@@ -2959,6 +3015,46 @@ class PptCharts extends AbstractDecoratorWriter
                 $objWriter->endElement();
             }
         }
+
+        $objWriter->endElement();
+    }
+
+    /**
+     * Write a run/default run-properties element (`a:rPr` / `a:defRPr`) for an
+     * axis title, styled from the axis font with an explicit bold override.
+     * Used by the rich, multi-line axis title path so each run can be bold or
+     * regular while sharing the axis font's colour, typeface and size.
+     */
+    protected function writeAxisTitleRunProperties(XMLWriter $objWriter, string $element, \PhpOffice\PhpPresentation\Style\Font $font, bool $bold, bool $withLang): void
+    {
+        $objWriter->startElement($element);
+
+        if ($withLang) {
+            $objWriter->writeAttribute('lang', 'en-US');
+            $objWriter->writeAttribute('dirty', '0');
+        }
+
+        $objWriter->writeAttribute('b', $bold ? 'true' : 'false');
+        $objWriter->writeAttribute('i', $font->isItalic() ? 'true' : 'false');
+        $objWriter->writeAttribute('strike', $font->getStrikethrough());
+        $objWriter->writeAttribute('sz', ($font->getSize() * 100));
+        $objWriter->writeAttribute('u', $font->getUnderline());
+        $objWriter->writeAttributeIf($font->getBaseline() !== 0, 'baseline', $font->getBaseline());
+
+        // a:solidFill
+        $objWriter->startElement('a:solidFill');
+        $this->writeColor($objWriter, $font->getColor());
+        $objWriter->endElement();
+
+        // a:latin
+        $objWriter->startElement('a:latin');
+        $objWriter->writeAttribute('typeface', $font->getName());
+        $objWriter->endElement();
+
+        // a:ea
+        $objWriter->startElement('a:ea');
+        $objWriter->writeAttribute('typeface', $font->getName());
+        $objWriter->endElement();
 
         $objWriter->endElement();
     }

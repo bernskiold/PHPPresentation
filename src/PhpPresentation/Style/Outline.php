@@ -25,6 +25,18 @@ namespace PhpOffice\PhpPresentation\Style;
  */
 class Outline
 {
+    public const DASH_SOLID = 'solid';
+    public const DASH_DOT = 'dot';
+    public const DASH_DASH = 'dash';
+    public const DASH_LARGEDASH = 'lgDash';
+    public const DASH_DASHDOT = 'dashDot';
+    public const DASH_LARGEDASHDOT = 'lgDashDot';
+    public const DASH_LARGEDASHDOTDOT = 'lgDashDotDot';
+    public const DASH_SYSTEMDASH = 'sysDash';
+    public const DASH_SYSTEMDOT = 'sysDot';
+    public const DASH_SYSTEMDASHDOT = 'sysDashDot';
+    public const DASH_SYSTEMDASHDOTDOT = 'sysDashDotDot';
+
     /**
      * @var Fill
      */
@@ -34,6 +46,14 @@ class Outline
      * @var int
      */
     protected $width = 1;
+
+    /**
+     * Preset dash style (one of the `DASH_*` constants). `null` leaves the
+     * line solid, matching PowerPoint's default.
+     *
+     * @var null|string
+     */
+    protected $dashStyle;
 
     public function __construct()
     {
@@ -66,6 +86,26 @@ class Outline
     public function setWidth(int $pValue = 1): self
     {
         $this->width = $pValue;
+
+        return $this;
+    }
+
+    public function getDashStyle(): ?string
+    {
+        return $this->dashStyle;
+    }
+
+    public function hasDashStyle(): bool
+    {
+        return null !== $this->dashStyle;
+    }
+
+    /**
+     * @param null|string $pValue One of the `DASH_*` constants, or null for a solid line.
+     */
+    public function setDashStyle(?string $pValue = null): self
+    {
+        $this->dashStyle = $pValue;
 
         return $this;
     }

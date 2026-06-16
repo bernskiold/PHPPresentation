@@ -69,6 +69,18 @@ class DataPoint implements ComparableInterface
     private $labelPosition;
 
     /**
+     * Per-point marker visibility override.
+     *
+     * `null` inherits the series-level marker; `false` hides the marker for
+     * this point only (emitted as `<c:dPt><c:marker><c:symbol val="none"/>`);
+     * `true` forces a circle marker. Used to draw connector "spokes" whose
+     * shared anchor point should not render its own marker.
+     *
+     * @var null|bool
+     */
+    private $markerVisible;
+
+    /**
      * @var int
      */
     private $hashIndex = 0;
@@ -172,6 +184,23 @@ class DataPoint implements ComparableInterface
         return $this;
     }
 
+    public function isMarkerVisible(): ?bool
+    {
+        return $this->markerVisible;
+    }
+
+    public function hasMarkerVisibility(): bool
+    {
+        return null !== $this->markerVisible;
+    }
+
+    public function setMarkerVisible(?bool $visible): self
+    {
+        $this->markerVisible = $visible;
+
+        return $this;
+    }
+
     /**
      * Get hash code.
      *
@@ -186,6 +215,7 @@ class DataPoint implements ComparableInterface
             . '|' . (null === $this->fill ? 'null' : $this->fill->getHashCode())
             . '|' . (null === $this->font ? 'null' : $this->font->getHashCode())
             . '|' . (null === $this->labelPosition ? 'null' : $this->labelPosition)
+            . '|' . (null === $this->markerVisible ? 'null' : ($this->markerVisible ? '1' : '0'))
             . '|' . __CLASS__
         );
     }

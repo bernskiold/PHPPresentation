@@ -255,6 +255,21 @@ class AdvancedScatterSeries extends Series
     }
 
     /**
+     * @return array<int, bool> Map of data point index → marker visibility (only points with an explicit override).
+     */
+    public function getDataPointMarkerVisibilities(): array
+    {
+        $visibilities = [];
+        foreach ($this->dataPoints as $idx => $point) {
+            if ($point->hasMarkerVisibility()) {
+                $visibilities[$idx] = (bool) $point->isMarkerVisible();
+            }
+        }
+
+        return $visibilities;
+    }
+
+    /**
      * Get hash code.
      *
      * @return string Hash code
