@@ -23,6 +23,8 @@ namespace PhpOffice\PhpPresentation\Tests\Reader;
 use PhpOffice\PhpPresentation\DocumentLayout;
 use PhpOffice\PhpPresentation\Exception\FileNotFoundException;
 use PhpOffice\PhpPresentation\Exception\InvalidFileFormatException;
+use PhpOffice\PhpPresentation\IOFactory;
+use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\PresentationProperties;
 use PhpOffice\PhpPresentation\Reader\PowerPoint2007;
 use PhpOffice\PhpPresentation\Shape\Chart;
@@ -1119,5 +1121,41 @@ class PowerPoint2007Test extends TestCase
         $object = new PowerPoint2007();
         $oPhpPresentation = $object->load($file);
         self::assertInstanceOf('PhpOffice\\PhpPresentation\\PhpPresentation', $oPhpPresentation);
+    }
+
+    public function testLoadSections(): void
+    {
+        $written = new PhpPresentation();
+        $written->createSlide();
+        $written->createSlide();
+        $written->createSection('Default Section')->addSlide($written->getSlide(0));
+        $written->createSection('Ford')->setSlides([$written->getSlide(1), $written->getSlide(2)]);
+        $written->createSection('Coca-Cola');
+
+        $file = tempnam(sys_get_temp_dir(), 'PhpPresentation');
+        IOFactory::createWriter($written, 'PowerPoint2007')->save($file);
+
+        $object = new PowerPoint2007();
+        $oPhpPresentation = $object->load($file);
+        unlink($file);
+
+        $sections = $oPhpPresentation->getAllSections();
+        self::assertCount(3, $sections);
+        self::assertSame('Default Section', $sections[0]->getName());
+        self::assertSame($written->getAllSections()[0]->getId(), $sections[0]->getId());
+        self::assertSame([$oPhpPresentation->getSlide(0)], $sections[0]->getSlides());
+        self::assertSame('Ford', $sections[1]->getName());
+        self::assertSame([$oPhpPresentation->getSlide(1), $oPhpPresentation->getSlide(2)], $sections[1]->getSlides());
+        self::assertSame('Coca-Cola', $sections[2]->getName());
+        self::assertSame([], $sections[2]->getSlides());
+    }
+
+    public function testLoadWithoutSections(): void
+    {
+        $file = PHPPRESENTATION_TESTS_BASE_DIR . '/resources/files/Sample_12.pptx';
+        $object = new PowerPoint2007();
+        $oPhpPresentation = $object->load($file);
+
+        self::assertSame([], $oPhpPresentation->getAllSections());
     }
 }

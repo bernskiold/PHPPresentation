@@ -105,6 +105,30 @@ $properties->getCustomPropertyType('unknown'); // return `null` if not set
 $properties->getCustomPropertyType('propertyName'); // return `DocumentProperties::PROPERTY_TYPE_STRING`
 ```
 
+## Sections
+
+Sections group slides under a name, as PowerPoint shows them in its slide pane. A section holds slides of the presentation; the order of the slides is the presentation's.
+
+``` php
+<?php
+
+$section = $presentation->createSection('Introduction');
+$section->addSlide($presentation->getSlide(0));
+
+$presentation->createSection('Results')
+    ->addSlide($presentation->createSlide())
+    ->addSlide($presentation->createSlide());
+
+// Every section, in order
+$presentation->getAllSections();
+// The section a slide is in, or null
+$presentation->getSectionOf($slide);
+```
+
+Once a presentation has sections, PowerPoint expects every slide to be in one of them. A slide in two sections is written under the first. A section may be empty.
+
+Sections are read and written for the PowerPoint 2007 (.pptx) format.
+
 ## Presentation Properties
 
 You can define some properties which are relative to the presentation, like the zoom or the thumbnail.

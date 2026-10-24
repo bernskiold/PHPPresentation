@@ -188,11 +188,68 @@ class PptPresentation extends AbstractDecoratorWriter
  </p:defaultTextStyle>
 ');
 
+        $this->writeSections($objWriter);
+
         $objWriter->endElement();
 
         $this->oZip->addFromString('ppt/presentation.xml', $objWriter->getData());
 
         // Return
         return $this->oZip;
+    }
+
+    /**
+     * Sections are a PowerPoint 2010 extension, written as the presentation's
+     * last child. A slide is listed under the first section holding it, in the
+     * presentation's order.
+     */
+    protected function writeSections(XMLWriter $objWriter): void
+    {
+        $sections = $this->oPresentation->getAllSections();
+        if (empty($sections)) {
+            return;
+        }
+
+        $slides = $this->oPresentation->getAllSlides();
+        $listed = [];
+
+        // p:extLst
+        $objWriter->startElement('p:extLst');
+        // p:ext
+        $objWriter->startElement('p:ext');
+        $objWriter->writeAttribute('uri', '{521415D9-36F7-43E2-AB2F-B90AF26B5E84}');
+        // p14:sectionLst
+        $objWriter->startElement('p14:sectionLst');
+        $objWriter->writeAttribute('xmlns:p14', 'http://schemas.microsoft.com/office/powerpoint/2010/main');
+
+        foreach ($sections as $section) {
+            // p14:section
+            $objWriter->startElement('p14:section');
+            $objWriter->writeAttribute('name', $section->getName());
+            $objWriter->writeAttribute('id', $section->getId());
+            // p14:sldIdLst
+            $objWriter->startElement('p14:sldIdLst');
+            foreach ($slides as $index => $slide) {
+                if (isset($listed[$index]) || !$section->hasSlide($slide)) {
+                    continue;
+                }
+                $listed[$index] = true;
+                // p14:sldId
+                $objWriter->startElement('p14:sldId');
+                $objWriter->writeAttribute('id', $index + 256);
+                $objWriter->endElement();
+            }
+            // > p14:sldIdLst
+            $objWriter->endElement();
+            // > p14:section
+            $objWriter->endElement();
+        }
+
+        // > p14:sectionLst
+        $objWriter->endElement();
+        // > p:ext
+        $objWriter->endElement();
+        // > p:extLst
+        $objWriter->endElement();
     }
 }

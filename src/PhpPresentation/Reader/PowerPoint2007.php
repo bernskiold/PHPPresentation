@@ -33,6 +33,7 @@ use PhpOffice\PhpPresentation\Exception\FileNotFoundException;
 use PhpOffice\PhpPresentation\Exception\InvalidFileFormatException;
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\PresentationProperties;
+use PhpOffice\PhpPresentation\Section;
 use PhpOffice\PhpPresentation\Shape\Chart;
 use PhpOffice\PhpPresentation\Shape\Drawing\Base64;
 use PhpOffice\PhpPresentation\Shape\Drawing\Gd;
@@ -388,6 +389,7 @@ class PowerPoint2007 implements ReaderInterface
             // Load the Masterslides
             $this->loadMasterSlides($xmlReader, $fileRels);
             // Continue with loading the slides
+            $slidesById = [];
             foreach ($xmlReader->getElements('/p:presentation/p:sldIdLst/p:sldId') as $oElement) {
                 if (!($oElement instanceof DOMElement)) {
                     continue;
@@ -400,6 +402,7 @@ class PowerPoint2007 implements ReaderInterface
                         $slideRels = 'ppt/slides/_rels/' . basename($pathSlide) . '.rels';
                         $this->loadRels($slideRels);
                         $this->loadSlide($pptSlide, basename($pathSlide));
+                        $slidesById[$oElement->getAttribute('id')] = $this->oPhpPresentation->getActiveSlide();
                         foreach ($this->arrayRels[$slideRels] as $rel) {
                             if ('http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide' == $rel['Type']) {
                                 $this->loadSlideNote(basename($rel['Target']), $this->oPhpPresentation->getActiveSlide());
@@ -408,6 +411,37 @@ class PowerPoint2007 implements ReaderInterface
                     }
                 }
             }
+            $this->loadSections($xmlReader, $slidesById);
+        }
+    }
+
+    /**
+     * Extract the sections, a PowerPoint 2010 extension.
+     *
+     * @param array<string, Slide> $slidesById the loaded slides, by their id in p:sldIdLst
+     */
+    protected function loadSections(XMLReader $xmlReader, array $slidesById): void
+    {
+        $xmlReader->registerNamespace('p14', 'http://schemas.microsoft.com/office/powerpoint/2010/main');
+
+        foreach ($xmlReader->getElements('/p:presentation/p:extLst/p:ext/p14:sectionLst/p14:section') as $oElement) {
+            if (!($oElement instanceof DOMElement)) {
+                continue;
+            }
+            $oSection = new Section(
+                $oElement->getAttribute('name'),
+                $oElement->hasAttribute('id') ? $oElement->getAttribute('id') : null
+            );
+            foreach ($xmlReader->getElements('p14:sldIdLst/p14:sldId', $oElement) as $oElementSlide) {
+                if (!($oElementSlide instanceof DOMElement)) {
+                    continue;
+                }
+                $id = $oElementSlide->getAttribute('id');
+                if (isset($slidesById[$id])) {
+                    $oSection->addSlide($slidesById[$id]);
+                }
+            }
+            $this->oPhpPresentation->addSection($oSection);
         }
     }
 
