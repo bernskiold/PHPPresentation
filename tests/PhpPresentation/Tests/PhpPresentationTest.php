@@ -25,6 +25,7 @@ use PhpOffice\PhpPresentation\DocumentProperties;
 use PhpOffice\PhpPresentation\Exception\OutOfBoundsException;
 use PhpOffice\PhpPresentation\PhpPresentation;
 use PhpOffice\PhpPresentation\PresentationProperties;
+use PhpOffice\PhpPresentation\Section;
 use PhpOffice\PhpPresentation\Slide;
 use PHPUnit\Framework\TestCase;
 
@@ -190,5 +191,55 @@ class PhpPresentationTest extends TestCase
         self::assertEquals('Slide 1', $presentation->getSlide(0)->getName());
         self::assertEquals('Slide 2', $presentation->getSlide(1)->getName());
         self::assertEquals('Slide 3', $presentation->getSlide(2)->getName());
+    }
+
+    public function testSections(): void
+    {
+        $object = new PhpPresentation();
+        $slide = $object->getSlide(0);
+        self::assertSame([], $object->getAllSections());
+        self::assertNull($object->getSectionOf($slide));
+
+        $first = $object->createSection('Default Section');
+        $first->addSlide($slide);
+        $second = $object->addSection(new Section('Ford'));
+
+        self::assertSame([$first, $second], $object->getAllSections());
+        self::assertSame($first, $object->getSectionOf($slide));
+
+        self::assertInstanceOf(PhpPresentation::class, $object->setAllSections([$second]));
+        self::assertSame([$second], $object->getAllSections());
+        self::assertNull($object->getSectionOf($slide));
+    }
+
+    public function testRemovingASlideRemovesItFromItsSection(): void
+    {
+        $object = new PhpPresentation();
+        $kept = $object->getSlide(0);
+        $removed = $object->createSlide();
+        $section = $object->createSection('Ford');
+        $section->setSlides([$kept, $removed]);
+
+        $object->removeSlideByIndex(1);
+
+        self::assertSame([$kept], $section->getSlides());
+    }
+
+    public function testCopyPointsSectionsAtTheCopiedSlides(): void
+    {
+        $object = new PhpPresentation();
+        $object->createSlide();
+        $object->createSection('Default Section')->addSlide($object->getSlide(0));
+        $object->createSection('Ford')->addSlide($object->getSlide(1));
+
+        $copy = $object->copy();
+        $sections = $copy->getAllSections();
+
+        self::assertCount(2, $sections);
+        self::assertNotSame($object->getAllSections()[0], $sections[0]);
+        self::assertSame($object->getAllSections()[1]->getId(), $sections[1]->getId());
+        self::assertSame('Ford', $sections[1]->getName());
+        self::assertSame([$copy->getSlide(1)], $sections[1]->getSlides());
+        self::assertSame([$object->getSlide(1)], $object->getAllSections()[1]->getSlides());
     }
 }

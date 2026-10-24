@@ -73,6 +73,13 @@ class PhpPresentation
     protected $slideMasters;
 
     /**
+     * Collection of sections, in the order they appear.
+     *
+     * @var array<int, Section>
+     */
+    protected $sections = [];
+
+    /**
      * Create a new PhpPresentation with one Slide.
      */
     public function __construct()
@@ -187,7 +194,11 @@ class PhpPresentation
         if ($index > count($this->slideCollection) - 1) {
             throw new OutOfBoundsException(0, count($this->slideCollection) - 1, $index);
         }
-        array_splice($this->slideCollection, $index, 1);
+        $removed = array_splice($this->slideCollection, $index, 1);
+
+        foreach ($this->sections as $section) {
+            $section->removeSlide($removed[0]);
+        }
 
         return $this;
     }
@@ -325,6 +336,13 @@ class PhpPresentation
         $oldSlideCollection = $this->slideCollection;
         $newSlideCollection = [];
 
+        // The same goes for the sections, which lose a slide whenever it is
+        // removed from the presentation.
+        $oldSectionSlides = [];
+        foreach ($this->sections as $key => $section) {
+            $oldSectionSlides[$key] = $section->getSlides();
+        }
+
         for ($i = 0; $i < $slideCount; ++$i) {
             $newSlideCollection[$i] = $oldSlideCollection[$i]->copy();
             $newSlideCollection[$i]->rebindParent($copied);
@@ -336,6 +354,21 @@ class PhpPresentation
 
         // Return the original slides to the original presentation.
         $this->slideCollection = $oldSlideCollection;
+
+        // Return the original slides to the original sections, and point the
+        // copied sections at the copied slides.
+        $copied->sections = [];
+        foreach ($this->sections as $key => $section) {
+            $section->setSlides($oldSectionSlides[$key]);
+            $copiedSection = new Section($section->getName(), $section->getId());
+            foreach ($oldSectionSlides[$key] as $slide) {
+                $index = array_search($slide, $oldSlideCollection, true);
+                if (false !== $index) {
+                    $copiedSection->addSlide($newSlideCollection[$index]);
+                }
+            }
+            $copied->sections[] = $copiedSection;
+        }
 
         return $copied;
     }
@@ -358,5 +391,57 @@ class PhpPresentation
         }
 
         return $this;
+    }
+
+    /**
+     * Create a section and add it to this presentation, after any others.
+     */
+    public function createSection(string $name = ''): Section
+    {
+        return $this->addSection(new Section($name));
+    }
+
+    /**
+     * Add a section, after any others.
+     */
+    public function addSection(Section $section): Section
+    {
+        $this->sections[] = $section;
+
+        return $section;
+    }
+
+    /**
+     * Get all sections, in the order they appear.
+     *
+     * @return array<int, Section>
+     */
+    public function getAllSections(): array
+    {
+        return $this->sections;
+    }
+
+    /**
+     * @param array<int, Section> $sections
+     */
+    public function setAllSections(array $sections = []): self
+    {
+        $this->sections = array_values($sections);
+
+        return $this;
+    }
+
+    /**
+     * The section a slide belongs to, if any.
+     */
+    public function getSectionOf(Slide $slide): ?Section
+    {
+        foreach ($this->sections as $section) {
+            if ($section->hasSlide($slide)) {
+                return $section;
+            }
+        }
+
+        return null;
     }
 }
