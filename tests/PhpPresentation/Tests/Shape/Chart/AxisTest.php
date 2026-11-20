@@ -26,7 +26,9 @@ use PhpOffice\PhpPresentation\Style\Color;
 use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Outline;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use TypeError;
 
 /**
  * Test class for Axis element.
@@ -89,7 +91,7 @@ class AxisTest extends TestCase
     {
         $object = new Axis();
 
-        $this->expectException(\TypeError::class);
+        $this->expectException(TypeError::class);
         // @phpstan-ignore-next-line — intentionally passing a string to verify the runtime guard
         $object->setMinBounds('not-a-number');
     }
@@ -137,7 +139,7 @@ class AxisTest extends TestCase
     {
         $object = new Axis();
 
-        /** @var Gridlines $oMock */
+        /** @var Gridlines&MockObject $oMock */
         $oMock = $this->getMockBuilder(Gridlines::class)->getMock();
 
         self::assertInstanceOf(Axis::class, $object->setMajorGridlines($oMock));
@@ -181,7 +183,7 @@ class AxisTest extends TestCase
 
     public function testOutline(): void
     {
-        /** @var Outline $oMock */
+        /** @var MockObject&Outline $oMock */
         $oMock = $this->getMockBuilder(Outline::class)->getMock();
 
         $object = new Axis();

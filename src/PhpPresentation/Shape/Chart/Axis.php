@@ -25,6 +25,7 @@ use PhpOffice\PhpPresentation\Style\Color;
 use PhpOffice\PhpPresentation\Style\Fill;
 use PhpOffice\PhpPresentation\Style\Font;
 use PhpOffice\PhpPresentation\Style\Outline;
+use TypeError;
 
 class Axis implements ComparableInterface
 {
@@ -293,7 +294,7 @@ class Axis implements ComparableInterface
     public function setMinBounds($minBounds = null): self
     {
         if (null !== $minBounds && !is_int($minBounds) && !is_float($minBounds)) {
-            throw new \TypeError(sprintf(
+            throw new TypeError(sprintf(
                 'Axis::setMinBounds() expects int, float, or null, %s given',
                 gettype($minBounds)
             ));
@@ -322,7 +323,7 @@ class Axis implements ComparableInterface
     public function setMaxBounds($maxBounds = null): self
     {
         if (null !== $maxBounds && !is_int($maxBounds) && !is_float($maxBounds)) {
-            throw new \TypeError(sprintf(
+            throw new TypeError(sprintf(
                 'Axis::setMaxBounds() expects int, float, or null, %s given',
                 gettype($maxBounds)
             ));

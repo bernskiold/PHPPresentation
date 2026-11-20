@@ -91,11 +91,11 @@ class AdvancedScatterSeriesTest extends TestCase
 
     public function testConstructFromDataPointInstances(): void
     {
-        $a = new DataPoint(1.0, 2.0, 'A');
-        $b = new DataPoint(3.0, 4.0);
-        $series = new AdvancedScatterSeries('Mixed', [$a, $b]);
+        $first = new DataPoint(1.0, 2.0, 'A');
+        $second = new DataPoint(3.0, 4.0);
+        $series = new AdvancedScatterSeries('Mixed', [$first, $second]);
 
-        self::assertSame([$a, $b], $series->getDataPoints());
+        self::assertSame([$first, $second], $series->getDataPoints());
     }
 
     public function testAddDataPoint(): void
@@ -219,20 +219,20 @@ class AdvancedScatterSeriesTest extends TestCase
 
     public function testHashCodeReflectsData(): void
     {
-        $a = new AdvancedScatterSeries('S', [[1.0, 2.0]]);
-        $b = new AdvancedScatterSeries('S', [[1.0, 2.0]]);
-        $c = new AdvancedScatterSeries('S', [[1.0, 3.0]]);
+        $first = new AdvancedScatterSeries('S', [[1.0, 2.0]]);
+        $same = new AdvancedScatterSeries('S', [[1.0, 2.0]]);
+        $other = new AdvancedScatterSeries('S', [[1.0, 3.0]]);
 
-        self::assertSame($a->getHashCode(), $b->getHashCode());
-        self::assertNotSame($a->getHashCode(), $c->getHashCode());
+        self::assertSame($first->getHashCode(), $same->getHashCode());
+        self::assertNotSame($first->getHashCode(), $other->getHashCode());
     }
 
     public function testHashCodeChangesWithLabel(): void
     {
-        $a = new AdvancedScatterSeries('S', [[1.0, 2.0]]);
-        $b = new AdvancedScatterSeries('S', [[1.0, 2.0, 'Apple']]);
+        $unlabelled = new AdvancedScatterSeries('S', [[1.0, 2.0]]);
+        $labelled = new AdvancedScatterSeries('S', [[1.0, 2.0, 'Apple']]);
 
-        self::assertNotSame($a->getHashCode(), $b->getHashCode());
+        self::assertNotSame($unlabelled->getHashCode(), $labelled->getHashCode());
     }
 
     public function testCloneDeepCopiesPoints(): void

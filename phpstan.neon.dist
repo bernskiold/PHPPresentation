@@ -24,6 +24,8 @@ parameters:
     - '#^Parameter \#1 \$image of function imagesy expects GdImage, resource given\.#'
     - '#^Parameter \#1 \$image of function imagealphablending expects GdImage, resource given\.#'
     - '#^Parameter \#1 \$image of function imagesavealpha expects GdImage, resource given\.#'
+    ## PHPStan 1.4 (PHP 7.1) : Axis::setTitleParagraphs() does not check its runs, so the writer keeps its fallbacks
+    - '#^Offset ''(bold|text)'' on array\{text\: string, bold\: bool\} on left side of \?\? always exists and is not nullable\.#'
     # # PHP 8.0 & Attribute
     - '#^Attribute class PHPUnit\\Framework\\Attributes\\DataProvider does not exist\.#'
 

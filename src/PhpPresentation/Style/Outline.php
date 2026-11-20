@@ -101,7 +101,7 @@ class Outline
     }
 
     /**
-     * @param null|string $pValue One of the `DASH_*` constants, or null for a solid line.
+     * @param null|string $pValue one of the `DASH_*` constants, or null for a solid line
      */
     public function setDashStyle(?string $pValue = null): self
     {

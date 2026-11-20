@@ -238,20 +238,26 @@ class PowerPoint2007 implements ReaderInterface
                 '/cp:coreProperties/dc:subject' => 'setSubject',
                 '/cp:coreProperties/cp:keywords' => 'setKeywords',
                 '/cp:coreProperties/cp:category' => 'setCategory',
-                '/cp:coreProperties/dcterms:created' => 'setCreated',
-                '/cp:coreProperties/dcterms:modified' => 'setModified',
                 '/cp:coreProperties/cp:revision' => 'setRevision',
                 '/cp:coreProperties/cp:contentStatus' => 'setStatus',
+            ];
+            $arrayDateProperties = [
+                '/cp:coreProperties/dcterms:created' => 'setCreated',
+                '/cp:coreProperties/dcterms:modified' => 'setModified',
             ];
             $oProperties = $this->oPhpPresentation->getDocumentProperties();
             foreach ($arrayProperties as $path => $property) {
                 $oElement = $xmlReader->getElement($path);
                 if ($oElement instanceof DOMElement) {
-                    if ($oElement->hasAttribute('xsi:type') && 'dcterms:W3CDTF' == $oElement->getAttribute('xsi:type')) {
-                        $dateTime = DateTime::createFromFormat(DateTime::W3C, $oElement->nodeValue);
+                    $oProperties->{$property}((string) $oElement->nodeValue);
+                }
+            }
+            foreach ($arrayDateProperties as $path => $property) {
+                $oElement = $xmlReader->getElement($path);
+                if ($oElement instanceof DOMElement) {
+                    $dateTime = DateTime::createFromFormat(DateTime::W3C, (string) $oElement->nodeValue);
+                    if (false !== $dateTime) {
                         $oProperties->{$property}($dateTime->getTimestamp());
-                    } else {
-                        $oProperties->{$property}($oElement->nodeValue);
                     }
                 }
             }
@@ -285,7 +291,7 @@ class PowerPoint2007 implements ReaderInterface
         // @phpstan-ignore-next-line
         if ($xmlReader->getDomFromString($sPart)) {
             foreach ($xmlReader->getElements('/Properties/property[@fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"]') as $element) {
-                if (!$element->hasAttribute('name')) {
+                if (!$element instanceof DOMElement || !$element->hasAttribute('name')) {
                     continue;
                 }
                 $propertyName = $element->getAttribute('name');
@@ -939,44 +945,45 @@ class PowerPoint2007 implements ReaderInterface
      */
     protected function loadShadow(XMLReader $document, DOMElement $node): ?Shadow
     {
-        if ($node instanceof DOMElement) {
-            $aNodes = $document->getElements('*', $node);
-            foreach ($aNodes as $nodeShadow) {
-                $type = explode(':', $nodeShadow->tagName);
-                $type = array_pop($type);
-                if ($type == Shadow::TYPE_SHADOW_INNER || $type == Shadow::TYPE_SHADOW_OUTER || $type == Shadow::TYPE_REFLECTION) {
-                    $oShadow = new Shadow();
-                    $oShadow->setVisible(true);
-                    $oShadow->setType($type);
-                    if ($nodeShadow->hasAttribute('blurRad')) {
-                        $oShadow->setBlurRadius((int) CommonDrawing::emuToPixels((int) $nodeShadow->getAttribute('blurRad')));
-                    }
-                    if ($nodeShadow->hasAttribute('dist')) {
-                        $oShadow->setDistance((int) CommonDrawing::emuToPixels((int) $nodeShadow->getAttribute('dist')));
-                    }
-                    if ($nodeShadow->hasAttribute('dir')) {
-                        $oShadow->setDirection((int) CommonDrawing::angleToDegrees((int) $nodeShadow->getAttribute('dir')));
-                    }
-                    if ($nodeShadow->hasAttribute('algn')) {
-                        $oShadow->setAlignment($node->getAttribute('algn'));
-                    }
-
-                    // Get color define by prstClr
-                    $oSubElement = $document->getElement('a:prstClr', $nodeShadow);
-                    if ($oSubElement instanceof DOMElement && $oSubElement->hasAttribute('val')) {
-                        $oColor = new Color();
-                        $oColor->setRGB($oSubElement->getAttribute('val'));
-
-                        $oSubElt = $document->getElement('a:alpha', $oSubElement);
-                        if ($oSubElt instanceof DOMElement && $oSubElt->hasAttribute('val')) {
-                            $oColor->setAlpha((int) $oSubElt->getAttribute('val') / 1000);
-                        }
-
-                        $oShadow->setColor($oColor);
-                    }
-
-                    return $oShadow;
+        $aNodes = $document->getElements('*', $node);
+        foreach ($aNodes as $nodeShadow) {
+            if (!$nodeShadow instanceof DOMElement) {
+                continue;
+            }
+            $type = explode(':', $nodeShadow->tagName);
+            $type = array_pop($type);
+            if ($type == Shadow::TYPE_SHADOW_INNER || $type == Shadow::TYPE_SHADOW_OUTER || $type == Shadow::TYPE_REFLECTION) {
+                $oShadow = new Shadow();
+                $oShadow->setVisible(true);
+                $oShadow->setType($type);
+                if ($nodeShadow->hasAttribute('blurRad')) {
+                    $oShadow->setBlurRadius((int) CommonDrawing::emuToPixels((int) $nodeShadow->getAttribute('blurRad')));
                 }
+                if ($nodeShadow->hasAttribute('dist')) {
+                    $oShadow->setDistance((int) CommonDrawing::emuToPixels((int) $nodeShadow->getAttribute('dist')));
+                }
+                if ($nodeShadow->hasAttribute('dir')) {
+                    $oShadow->setDirection((int) CommonDrawing::angleToDegrees((int) $nodeShadow->getAttribute('dir')));
+                }
+                if ($nodeShadow->hasAttribute('algn')) {
+                    $oShadow->setAlignment($node->getAttribute('algn'));
+                }
+
+                // Get color define by prstClr
+                $oSubElement = $document->getElement('a:prstClr', $nodeShadow);
+                if ($oSubElement instanceof DOMElement && $oSubElement->hasAttribute('val')) {
+                    $oColor = new Color();
+                    $oColor->setRGB($oSubElement->getAttribute('val'));
+
+                    $oSubElt = $document->getElement('a:alpha', $oSubElement);
+                    if ($oSubElt instanceof DOMElement && $oSubElt->hasAttribute('val')) {
+                        $oColor->setAlpha((int) $oSubElt->getAttribute('val') / 1000);
+                    }
+
+                    $oShadow->setColor($oColor);
+                }
+
+                return $oShadow;
             }
         }
 
@@ -1289,6 +1296,9 @@ class PowerPoint2007 implements ReaderInterface
 
                         $elementSeries = $xmlReader->getElements('c:ser', $oElement);
                         foreach ($elementSeries as $elementSerie) {
+                            if (!$elementSerie instanceof DOMElement) {
+                                continue;
+                            }
                             $series = new Chart\Series();
                             if ($elementTitle = $xmlReader->getElement('c:tx/c:strRef/c:strCache/c:pt/c:v', $elementSerie)) {
                                 $series->setTitle($elementTitle->nodeValue);
@@ -1379,6 +1389,9 @@ class PowerPoint2007 implements ReaderInterface
 
                         $elementSeries = $xmlReader->getElements('c:ser', $oElement);
                         foreach ($elementSeries as $elementSerie) {
+                            if (!$elementSerie instanceof DOMElement) {
+                                continue;
+                            }
                             $series = new Chart\Series\AdvancedScatterSeries();
                             if ($elementTitle = $xmlReader->getElement('c:tx/c:strRef/c:strCache/c:pt/c:v', $elementSerie)) {
                                 $series->setTitle($elementTitle->nodeValue);
@@ -1422,6 +1435,9 @@ class PowerPoint2007 implements ReaderInterface
                             // Per-data-point fills (c:dPt) → DataPoint::setFill().
                             $elementDataPoints = $xmlReader->getElements('c:dPt', $elementSerie);
                             foreach ($elementDataPoints as $elementDataPoint) {
+                                if (!$elementDataPoint instanceof DOMElement) {
+                                    continue;
+                                }
                                 $elementDpIdx = $xmlReader->getElement('c:idx', $elementDataPoint);
                                 if (!($elementDpIdx instanceof DOMElement)) {
                                     continue;
@@ -1441,6 +1457,9 @@ class PowerPoint2007 implements ReaderInterface
                             // Per-data-point custom labels (c:dLbl).
                             $elementDataLabels = $xmlReader->getElements('c:dLbls/c:dLbl', $elementSerie);
                             foreach ($elementDataLabels as $elementDataLabel) {
+                                if (!$elementDataLabel instanceof DOMElement) {
+                                    continue;
+                                }
                                 $elementDlIdx = $xmlReader->getElement('c:idx', $elementDataLabel);
                                 if (!($elementDlIdx instanceof DOMElement)) {
                                     continue;

@@ -43,7 +43,7 @@ class AdvancedScatterSeries extends Series
     private $dataPoints = [];
 
     /**
-     * @param array<int, DataPoint|array{0: float|int|string, 1: float|int|string, 2?: null|string}|array{x: float|int|string, y: float|int|string, title?: null|string}> $dataPoints
+     * @param array<int, array{0: float|int|string, 1: float|int|string, 2?: null|string}|array{x: float|int|string, y: float|int|string, title?: null|string}|DataPoint> $dataPoints
      */
     public function __construct(string $title = 'Series Title', array $dataPoints = [])
     {
@@ -92,7 +92,7 @@ class AdvancedScatterSeries extends Series
      *   - Positional pairs `[1.0, 2.5]` or triples `[1.0, 2.5, 'Apple']`
      *   - Associative `['x' => 1.0, 'y' => 2.5, 'title' => 'Apple']`
      *
-     * @param array<int, DataPoint|array{0: float|int|string, 1: float|int|string, 2?: null|string}|array{x: float|int|string, y: float|int|string, title?: null|string}> $dataPoints
+     * @param array<int, array{0: float|int|string, 1: float|int|string, 2?: null|string}|array{x: float|int|string, y: float|int|string, title?: null|string}|DataPoint> $dataPoints
      */
     public function setDataPoints(array $dataPoints): self
     {
@@ -100,6 +100,7 @@ class AdvancedScatterSeries extends Series
         foreach ($dataPoints as $point) {
             if ($point instanceof DataPoint) {
                 $this->dataPoints[] = $point;
+
                 continue;
             }
             if (array_key_exists('x', $point) && array_key_exists('y', $point)) {
@@ -110,6 +111,7 @@ class AdvancedScatterSeries extends Series
                         ? (string) $point['title']
                         : null
                 );
+
                 continue;
             }
             $this->dataPoints[] = new DataPoint(
@@ -208,7 +210,7 @@ class AdvancedScatterSeries extends Series
     }
 
     /**
-     * @return array<int, string> Map of data point index → label text (only points that have a label).
+     * @return array<int, string> map of data point index → label text (only points that have a label)
      */
     public function getDataPointLabels(): array
     {
@@ -240,7 +242,7 @@ class AdvancedScatterSeries extends Series
     }
 
     /**
-     * @return array<int, Fill> Map of data point index → fill (only points that have one set).
+     * @return array<int, Fill> map of data point index → fill (only points that have one set)
      */
     public function getDataPointFills(): array
     {
@@ -255,7 +257,7 @@ class AdvancedScatterSeries extends Series
     }
 
     /**
-     * @return array<int, bool> Map of data point index → marker visibility (only points with an explicit override).
+     * @return array<int, bool> map of data point index → marker visibility (only points with an explicit override)
      */
     public function getDataPointMarkerVisibilities(): array
     {
