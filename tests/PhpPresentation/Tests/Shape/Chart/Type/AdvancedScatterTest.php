@@ -49,11 +49,11 @@ class AdvancedScatterTest extends TestCase
         self::assertInstanceOf(AdvancedScatter::class, $object->setScatterStyle(AdvancedScatter::STYLE_LINE_MARKER));
         self::assertSame(AdvancedScatter::STYLE_LINE_MARKER, $object->getScatterStyle());
 
-        $object->setScatterStyle(AdvancedScatter::STYLE_SMOOTH);
+        $object = $object->setScatterStyle(AdvancedScatter::STYLE_SMOOTH);
         self::assertSame(AdvancedScatter::STYLE_SMOOTH, $object->getScatterStyle());
 
         // Invalid style is ignored.
-        $object->setScatterStyle('not-a-real-style');
+        $object = $object->setScatterStyle('not-a-real-style');
         self::assertSame(AdvancedScatter::STYLE_SMOOTH, $object->getScatterStyle());
     }
 

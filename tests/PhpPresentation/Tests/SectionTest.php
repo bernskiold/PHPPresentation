@@ -34,7 +34,8 @@ class SectionTest extends TestCase
         $section = new Section('Ford');
 
         self::assertSame('Ford', $section->getName());
-        self::assertMatchesRegularExpression('/^\{[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}\}$/', $section->getId());
+        // assertMatchesRegularExpression() does not exist in PHPUnit 7, which PHP 7.1 runs
+        self::assertSame(1, preg_match('/^\{[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}\}$/', $section->getId()));
         self::assertSame([], $section->getSlides());
     }
 

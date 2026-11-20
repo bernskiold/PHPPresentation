@@ -44,8 +44,6 @@ jobs:
   phpstan:
     name: PHP Static Analysis
     runs-on: ubuntu-latest
-    # PHP 8.6 is pre-release; let it fail without failing the build.
-    continue-on-error: ${{ matrix.php == '8.6' }}
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +58,10 @@ jobs:
 
         -   name: Composer Install
             run: composer install --ansi --prefer-dist --no-interaction --no-progress
+            env:
+              # Every phpspreadsheet release that installs on PHP 7.1 to 7.3 has a security advisory,
+              # which Composer blocks by default.
+              COMPOSER_NO_SECURITY_BLOCKING: ${{ contains(fromJSON('["7.1", "7.2", "7.3"]'), matrix.php) && '1' || '' }}
 
         -   name: Run phpstan
             run: ./vendor/bin/phpstan analyse -c phpstan.neon.dist
@@ -67,8 +69,6 @@ jobs:
   phpunit:
     name: PHPUnit ${{ matrix.php }}
     runs-on: ubuntu-latest
-    # PHP 8.6 is pre-release; let it fail without failing the build.
-    continue-on-error: ${{ matrix.php == '8.6' }}
     strategy:
       fail-fast: false
       matrix:
@@ -85,6 +85,10 @@ jobs:
 
       -   name: Composer Install
           run: composer install --ansi --prefer-dist --no-interaction --no-progress
+          env:
+            # Every phpspreadsheet release that installs on PHP 7.1 to 7.3 has a security advisory,
+            # which Composer blocks by default.
+            COMPOSER_NO_SECURITY_BLOCKING: ${{ contains(fromJSON('["7.1", "7.2", "7.3"]'), matrix.php) && '1' || '' }}
 
       -   name: Run phpunit
           if: matrix.php != '7.3'
@@ -106,8 +110,6 @@ jobs:
   samples:
     name: Check samples
     runs-on: ubuntu-latest
-    # PHP 8.6 is pre-release; let it fail without failing the build.
-    continue-on-error: ${{ matrix.php == '8.6' }}
     strategy:
       fail-fast: false
       matrix:
@@ -124,6 +126,10 @@ jobs:
 
       -   name: Composer Install
           run: composer install --ansi --prefer-dist --no-interaction --no-progress
+          env:
+            # Every phpspreadsheet release that installs on PHP 7.1 to 7.3 has a security advisory,
+            # which Composer blocks by default.
+            COMPOSER_NO_SECURITY_BLOCKING: ${{ contains(fromJSON('["7.1", "7.2", "7.3"]'), matrix.php) && '1' || '' }}
 
       -   name: Generate samples files
           run: composer run samples

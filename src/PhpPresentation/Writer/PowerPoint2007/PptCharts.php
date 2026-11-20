@@ -30,9 +30,9 @@ use PhpOffice\PhpPresentation\Shape\Chart;
 use PhpOffice\PhpPresentation\Shape\Chart\Gridlines;
 use PhpOffice\PhpPresentation\Shape\Chart\Legend;
 use PhpOffice\PhpPresentation\Shape\Chart\PlotArea;
-use PhpOffice\PhpPresentation\Shape\Chart\Title;
 use PhpOffice\PhpPresentation\Shape\Chart\Series\AdvancedScatterSeries;
 use PhpOffice\PhpPresentation\Shape\Chart\Series\DataPoint;
+use PhpOffice\PhpPresentation\Shape\Chart\Title;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\AdvancedScatter;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Area;
 use PhpOffice\PhpPresentation\Shape\Chart\Type\Bar;
@@ -278,6 +278,7 @@ class PptCharts extends AbstractDecoratorWriter
                 }
 
                 ++$seriesIndex;
+
                 continue;
             }
 
@@ -1382,9 +1383,7 @@ class PptCharts extends AbstractDecoratorWriter
             $objWriter->endElement();
         }
 
-        if (($angle = $subject->getFirstSliceAngle()) !== null) {
-            $this->writeElementWithValAttribute($objWriter, 'c:firstSliceAng', (string) $angle);
-        }
+        $this->writeElementWithValAttribute($objWriter, 'c:firstSliceAng', (string) $subject->getFirstSliceAngle());
 
         $this->writeElementWithValAttribute($objWriter, 'c:holeSize', (string) $subject->getHoleSize());
 
@@ -2588,7 +2587,7 @@ class PptCharts extends AbstractDecoratorWriter
         $objWriter->endElement(); // c:rich
         $objWriter->endElement(); // c:tx
 
-        if ($position !== null && $position !== '') {
+        if ($position !== '') {
             $objWriter->startElement('c:dLblPos');
             $objWriter->writeAttribute('val', $position);
             $objWriter->endElement();

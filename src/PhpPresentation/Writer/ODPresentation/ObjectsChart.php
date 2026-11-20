@@ -1002,6 +1002,10 @@ class ObjectsChart extends AbstractDecoratorWriter
         $this->xmlContent->endElement();
     }
 
+    /**
+     * Returns the spreadsheet column name for a 1-based column index
+     * (1 => A, 2 => B, 26 => Z, 27 => AA).
+     */
     private function getColumnName(int $index): string
     {
         $name = '';
